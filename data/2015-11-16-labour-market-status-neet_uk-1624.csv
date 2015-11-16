@@ -1,0 +1,121 @@
+---
+title: Labour market status and NEET
+description: >
+  Data for post 'Labour market status and NEET',
+  spanning 2001Q4-2015Q2 on those aged 16-24 in the UK
+url: http://www.christhoung.com/2015/11/16/lms-neet/
+sources:
+ - name: lms
+   author: Office for National Statistics
+   year: 2015
+   title: Labour Market Statistics, November 2015
+   url: http://www.ons.gov.uk/ons/rel/lms/labour-market-statistics/november-2015/index.html
+   accessed: 2015-11-12
+   notes: |
+     To retrieve the very latest figures from the Labour Market Statistics Dataset, use the following URL:
+     http://www.ons.gov.uk/ons/datasets-and-tables/data-selector.html?cdid=YBTO&cdid=YBTR&cdid=YBVH&cdid=YBVN&cdid=YCAS&cdid=YCAV&dataset=lms&table-id=02
+ - name: neet
+   author: Office for National Statistics
+   year: 2015
+   title: Young People not in Education, Employment or Training (NEET), August 2015
+   url: http://www.ons.gov.uk/ons/rel/lms/young-people-not-in-education--employment-or-training--neets-/august-2015/index.html
+   accessed: 2015-11-04
+   notes: n/a
+variables:
+ - name: emp1617
+   description: Employment, aged 16-17
+   units: thousands
+   source: lms
+ - name: emp1824
+   description: Employment, aged 18-24
+   units: thousands
+   source: lms
+ - name: unemp1617
+   description: Unemployment, aged 16-17
+   units: thousands
+   source: lms
+ - name: unemp1824
+   description: Unemployment, aged 18-24
+   units: thousands
+   source: lms
+ - name: inact1617
+   description: Economically inactive, aged 16-17
+   units: thousands
+   source: lms
+ - name: inact1824
+   description: Economically inactive, aged 18-24
+   units: thousands
+   source: lms
+ - name: neet1617u
+   description: Not in education, employment or training (unemployed), aged 16-17
+   units: thousands
+   source: neet
+ - name: neet1617i
+   description: Not in education, employment or training (economically inactive), aged 16-17
+   units: thousands
+   source: neet
+ - name: neet1824u
+   description: Not in education, employment or training (unemployed), aged 18-24
+   units: thousands
+   source: neet
+ - name: neet1824i
+   description: Not in education, employment or training (economically inactive), aged 18-24
+   units: thousands
+   source: neet
+---
+quarter,emp1617,emp1824,unemp1617,unemp1824,inact1617,inact1824,neet1617u,neet1617i,neet1824u,neet1824i
+2001Q4,673,3355,159,409,659,1183,78.1,45.2,295.2,414.3
+2002Q1,661,3358,155,406,680,1212,73.9,49.7,300.5,435.0
+2002Q2,643,3403,161,388,698,1216,76.1,54.2,291.7,450.9
+2002Q3,652,3390,163,398,690,1252,75.9,52.1,284.9,460.0
+2002Q4,661,3422,178,392,667,1260,85.1,44.3,269.2,437.5
+2003Q1,663,3384,171,422,673,1302,84.6,51.3,299.0,458.5
+2003Q2,641,3402,174,401,693,1340,83.4,53.6,277.7,476.3
+2003Q3,632,3441,168,410,712,1324,75.9,54.5,278.9,468.0
+2003Q4,636,3483,169,382,713,1341,74.0,46.0,264.9,462.2
+2004Q1,629,3537,171,401,723,1300,72.9,44.3,265.3,453.1
+2004Q2,619,3531,169,403,741,1334,72.8,53.6,284.1,468.7
+2004Q3,638,3515,181,407,715,1374,85.1,45.6,296.2,490.9
+2004Q4,629,3538,166,428,740,1356,79.9,53.0,310.5,478.8
+2005Q1,622,3540,177,407,739,1404,78.8,55.7,300.3,490.4
+2005Q2,614,3527,173,434,755,1416,76.2,57.3,313.7,499.7
+2005Q3,594,3532,171,432,778,1438,76.1,58.4,323.3,477.4
+2005Q4,540,3511,181,475,821,1441,83.9,57.5,346.9,515.0
+2006Q1,545,3575,179,472,819,1403,72.3,59.5,331.2,521.0
+2006Q2,550,3573,175,513,817,1388,68.8,68.8,379.7,504.2
+2006Q3,540,3607,180,513,827,1379,77.4,60.8,368.6,499.2
+2006Q4,555,3610,184,502,817,1411,64.5,63.9,350.5,500.1
+2007Q1,527,3608,188,514,848,1425,71.3,54.7,371.5,502.9
+2007Q2,510,3595,193,515,869,1462,72.1,52.8,366.7,512.6
+2007Q3,515,3616,212,488,849,1487,68.9,55.5,344.3,514.3
+2007Q4,556,3623,185,488,838,1497,68.8,56.5,344.9,494.6
+2008Q1,540,3634,172,505,870,1485,57.2,54.2,357.7,496.5
+2008Q2,528,3605,186,519,871,1516,65.5,51.8,367.7,513.3
+2008Q3,520,3577,187,566,875,1509,65.2,51.6,405.2,511.8
+2008Q4,488,3544,191,606,896,1514,62.5,48.1,443.3,471.2
+2009Q1,476,3439,196,668,898,1569,64.5,50.0,496.9,485.2
+2009Q2,432,3378,206,710,925,1599,57.0,56.5,516.4,497.9
+2009Q3,405,3321,206,728,948,1655,46.0,45.8,519.0,510.7
+2009Q4,398,3313,196,704,960,1705,52.6,41.6,489.9,498.8
+2010Q1,384,3305,205,732,961,1704,52.2,40.3,514.8,520.6
+2010Q2,392,3346,199,728,955,1687,48.2,40.9,491.4,493.2
+2010Q3,380,3406,196,711,966,1662,47.2,42.3,517.9,512.2
+2010Q4,358,3345,215,745,966,1709,45.6,40.2,544.9,533.2
+2011Q1,362,3347,215,728,959,1742,53.3,35.9,525.1,510.2
+2011Q2,359,3363,211,756,962,1717,57.9,32.7,556.0,517.7
+2011Q3,338,3277,226,809,964,1756,63.8,38.0,618.4,526.8
+2011Q4,356,3278,213,826,953,1741,52.4,44.0,614.2,501.0
+2012Q1,355,3299,210,818,951,1728,50.5,45.0,596.3,504.9
+2012Q2,358,3357,205,819,947,1672,51.9,41.1,592.7,506.1
+2012Q3,365,3337,195,784,951,1723,34.3,37.4,532.8,501.0
+2012Q4,334,3402,201,787,976,1652,35.4,33.2,534.8,481.5
+2013Q1,325,3376,194,779,994,1682,40.8,38.4,548.3,480.3
+2013Q2,328,3301,201,795,986,1736,35.5,36.9,557.5,463.2
+2013Q3,331,3342,187,794,995,1691,31.1,28.6,569.6,466.9
+2013Q4,328,3402,188,740,993,1680,38.0,28.5,531.5,442.7
+2014Q1,326,3430,182,694,997,1695,27.4,28.8,483.3,448.0
+2014Q2,319,3497,166,610,1017,1707,25.1,34.7,437.5,468.6
+2014Q3,320,3499,157,580,1019,1728,24.4,30.8,425.5,473.2
+2014Q4,346,3494,157,583,986,1722,31.2,27.4,419.2,485.3
+2015Q1,353,3535,148,588,981,1669,24.3,29.1,408.5,481.0
+2015Q2,354,3526,148,591,973,1667,26.7,24.0,404.6,466.3
