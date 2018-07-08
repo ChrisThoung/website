@@ -24,6 +24,6 @@ programs](http://gennaro.zezza.it/software/eviews/glch04.php).
 ## How to
 
 * Run the model: Open and run the Jupyter notebook, 'fsic_pc.ipynb'
-* Run the test suite: Run `python test_fsics.py` or a use `unittest`-compatible
+* Run the test suite: Run `python test_fsics.py` or use a `unittest`-compatible
   test framework (e.g. `unittest`, `pytest`, `nose`/`nose2`; other test
   frameworks are available)
