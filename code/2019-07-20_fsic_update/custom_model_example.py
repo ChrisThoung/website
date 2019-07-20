@@ -54,21 +54,33 @@ SOFTWARE.
 from fsic import BaseModel
 
 
-class Model(BaseModel):
+class CustomSIM(BaseModel):
     ENDOGENOUS = ['C', 'YD', 'H', 'Y', 'T']
     EXOGENOUS = ['G']
 
     PARAMETERS = ['alpha_1', 'alpha_2', 'theta']
-    ERRORS = []
 
-    NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
-    CHECK = ENDOGENOUS
+    # Remove extraneous (empty) `ERRORS` attribute
+    NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS
+
+    # (Arbitrarily) reduce the variables to be checked for convergence during
+    # solution
+    CHECK = ['C', 'H', 'Y']
 
     LAGS = 1
     LEADS = 0
 
-    def _evaluate(self, t):
+    # Extend function signature with a new keyword argument to apply exogenous
+    # changes in household consumption expenditure
+    # Not required, but note use of keyword-only argument in the function
+    # signature:
+    #     https://www.python.org/dev/peps/pep-3102/
+    def _evaluate(self, t, *, exogenous_change_in_consumption=0):
         self._C[t] = self._alpha_1[t] * self._YD[t] + self._alpha_2[t] * self._H[t-1]
+
+        # Apply exogenous changes in household consumption expenditure
+        self._C[t] += exogenous_change_in_consumption
+
         self._YD[t] = self._Y[t] - self._T[t]
         self._H[t] = self._H[t-1] + self._YD[t] - self._C[t]
         self._Y[t] = self._C[t] + self._G[t]
