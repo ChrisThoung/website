@@ -376,6 +376,7 @@ class BaseModel:
     ERRORS: List = []
 
     NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
+    CHECK = ENDOGENOUS
 
     LAGS = 0
     LEADS = 0
