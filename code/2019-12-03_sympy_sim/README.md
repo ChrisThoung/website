@@ -12,6 +12,7 @@ Palgrave Macmillan
 ## Contents
 
 * README.md : this file
+* sympy_sim.ipynb : Python notebook version of the blog post
 * fsic.py : version 0.2.0 of the re-implemented FSIC module (no changes from
   the [previous post](http://www.christhoung.com/2019/07/27/fsic-update/) about
   FSIC)
@@ -20,6 +21,8 @@ Palgrave Macmillan
 
 ## How to
 
+* Run the code from the blog post: Open and run the Jupyter notebook,
+  'sympy_sim.ipynb'
 * Run the test suite: Run `python test_fsics.py` or use a `unittest`-compatible
   test framework (e.g. `unittest`, `pytest`, `nose`/`nose2`; other test
   frameworks are available)
