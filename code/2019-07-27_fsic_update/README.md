@@ -14,7 +14,7 @@ Palgrave Macmillan
 * README.md : this file
 * fsic_update.ipynb : Python notebook version of the blog post
 * fsic.py : updated version (0.2.0) of the re-implemented FSIC module
-* test_fsics.py : test suite for fsic.py
+* test_fsic.py : test suite for fsic.py
 * custom_model_example.py : example of a hand-edited model definition
 
 ## How to
