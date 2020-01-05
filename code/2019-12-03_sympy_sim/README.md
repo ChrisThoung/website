@@ -3,6 +3,9 @@
 Code to accompany the post from 03/12/2019 on [An initial foray into computer
 algebra with SymPy](http://www.christhoung.com/2019/12/03/sympy-sim/).
 
+**Update 05/01/2020: Added a section to show how to insert numerical values
+into the solution.**
+
 The example is a simplified version of Model *SIM* from:
 
 Godley, W., Lavoie, M. (2007)  
