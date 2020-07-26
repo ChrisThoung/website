@@ -247,7 +247,7 @@ class BaseMDModel(MultiDimensionalContainer):
     LEADS: int = 0
 
     def __init__(self, span: Sequence[Hashable], *, dtype: Any = float, default_value: Union[int, float] = 0.0, **initial_values: Dict[str, Any]) -> None:
-        """
+        """Initialise model variables.
 
         Parameters
         ----------
@@ -330,15 +330,12 @@ class BaseMDModel(MultiDimensionalContainer):
         # `key` is a tuple (variable name plus index): return the selected
         # elements of the corresponding array
         if isinstance(key, tuple):
-            if len(key) != 2:
-                raise IndexError(
-                    'Invalid index: must be of length one (variable name) '
-                    'or length two (variable name, span index)')
-
-            # Unpack the key
+            # Unpack `key`
             name: str
             index: Union[Hashable, slice]
-            name, index = key
+            remaining_dims: List
+
+            name, index, *remaining_dims = key
 
             # Get the full array
             if name not in self.__dict__['index']:
@@ -359,11 +356,13 @@ class BaseMDModel(MultiDimensionalContainer):
                 start_location = self.__dict__['span'].index(start)
                 stop_location = self.__dict__['span'].index(stop) + 1
 
-                return values[start_location:stop_location:step]
+                indexes = tuple([slice(start_location, stop_location, step)] + remaining_dims)
 
             else:
                 location = self.__dict__['span'].index(index)
-                return values[location]
+                indexes = tuple([location] + remaining_dims)
+
+            return values[indexes]
 
         raise TypeError('Invalid index type ({}): `{}`'.format(type(key), key))
 
@@ -379,15 +378,12 @@ class BaseMDModel(MultiDimensionalContainer):
         # `key` is a tuple (variable name plus index): update selected elements
         # of the corresponding array
         if isinstance(key, tuple):
-            if len(key) != 2:
-                raise IndexError(
-                    'Invalid index: must be of length one (variable name) '
-                    'or length two (variable name, span index)')
-
-            # Unpack the key
+            # Unpack `key`
             name: str
             index: Union[Hashable, slice]
-            name, index = key
+            remaining_dims: List
+
+            name, index, *remaining_dims = key
 
             # Modify the relevant subset
             if isinstance(index, slice):
@@ -403,13 +399,14 @@ class BaseMDModel(MultiDimensionalContainer):
                 start_location = self.__dict__['span'].index(start)
                 stop_location = self.__dict__['span'].index(stop) + 1
 
-                self.__dict__['_' + name][start_location:stop_location:step] = value
-                return
+                indexes = tuple([slice(start_location, stop_location, step)] + remaining_dims)
 
             else:
                 location = self.__dict__['span'].index(index)
-                self.__dict__['_' + name][location] = value
-                return
+                indexes = tuple([location] + remaining_dims)
+
+            self.__dict__['_' + name][indexes] = value
+            return
 
         raise TypeError('Invalid index type ({}): `{}`'.format(type(key), key))
 

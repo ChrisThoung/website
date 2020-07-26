@@ -328,6 +328,82 @@ class TestBaseMDModel(unittest.TestCase):
         self.assertEqual(model['X', 2006:2008:2].shape, (2, 2, 3))
         self.assertTrue(np.allclose(model['X', 2006:2008:2], 2.0))
 
+    def test_extended_get_set_item(self):
+        # Check extended `__getitem__()` and `__setitem__()` indexing (beyond
+        # the name and period label)
+
+        class TestModel(iomodel.BaseMDModel):
+            VARIABLES = {'X': (2, 3), }
+
+        model = TestModel(range(2000, 2003 + 1), X=np.arange(24).reshape((4, 2, 3)))
+
+        # Check initial values
+        self.assertEqual(model.X.shape, (4, 2, 3))
+        self.assertTrue(np.allclose(model['X'],
+                                    np.array([[[ 0.0,  1.0,  2.0, ],
+                                               [ 3.0,  4.0,  5.0, ], ],
+                                              [[ 6.0,  7.0,  8.0, ],
+                                               [ 9.0, 10.0, 11.0, ], ],
+                                              [[12.0, 13.0, 14.0, ],
+                                               [15.0, 16.0, 17.0, ], ],
+                                              [[18.0, 19.0, 20.0, ],
+                                               [21.0, 22.0, 23.0, ], ], ])))
+
+        # Replace an entire period of data
+        model['X', 2000] = 0.0
+        self.assertTrue(np.allclose(model['X', 2000], 0.0))
+        self.assertEqual(model.X.shape, (4, 2, 3))
+        self.assertTrue(np.allclose(model['X'],
+                                    np.array([[[ 0.0,  0.0,  0.0, ],
+                                               [ 0.0,  0.0,  0.0, ], ],
+                                              [[ 6.0,  7.0,  8.0, ],
+                                               [ 9.0, 10.0, 11.0, ], ],
+                                              [[12.0, 13.0, 14.0, ],
+                                               [15.0, 16.0, 17.0, ], ],
+                                              [[18.0, 19.0, 20.0, ],
+                                               [21.0, 22.0, 23.0, ], ], ])))
+
+        # Replace an entire row of data for a single period
+        model['X', 2000, 1] = 1.0
+        self.assertTrue(np.allclose(model['X', 2000, 1], 1.0))
+        self.assertEqual(model.X.shape, (4, 2, 3))
+        self.assertTrue(np.allclose(model['X'],
+                                    np.array([[[ 0.0,  0.0,  0.0, ],
+                                               [ 1.0,  1.0,  1.0, ], ],
+                                              [[ 6.0,  7.0,  8.0, ],
+                                               [ 9.0, 10.0, 11.0, ], ],
+                                              [[12.0, 13.0, 14.0, ],
+                                               [15.0, 16.0, 17.0, ], ],
+                                              [[18.0, 19.0, 20.0, ],
+                                               [21.0, 22.0, 23.0, ], ], ])))
+
+        model['X', 2000, 1, :] = 2.0
+        self.assertTrue(np.allclose(model['X', 2000, 1], 2.0))
+        self.assertEqual(model.X.shape, (4, 2, 3))
+        self.assertTrue(np.allclose(model['X'],
+                                    np.array([[[ 0.0,  0.0,  0.0, ],
+                                               [ 2.0,  2.0,  2.0, ], ],
+                                              [[ 6.0,  7.0,  8.0, ],
+                                               [ 9.0, 10.0, 11.0, ], ],
+                                              [[12.0, 13.0, 14.0, ],
+                                               [15.0, 16.0, 17.0, ], ],
+                                              [[18.0, 19.0, 20.0, ],
+                                               [21.0, 22.0, 23.0, ], ], ])))
+
+        # Replace an entire column of data for a single period
+        model['X', 2001, :, 1] = 3.0
+        self.assertTrue(np.allclose(model['X', 2001, :, 1], 3.0))
+        self.assertEqual(model.X.shape, (4, 2, 3))
+        self.assertTrue(np.allclose(model['X'],
+                                    np.array([[[ 0.0,  0.0,  0.0, ],
+                                               [ 2.0,  2.0,  2.0, ], ],
+                                              [[ 6.0,  3.0,  8.0, ],
+                                               [ 9.0,  3.0, 11.0, ], ],
+                                              [[12.0, 13.0, 14.0, ],
+                                               [15.0, 16.0, 17.0, ], ],
+                                              [[18.0, 19.0, 20.0, ],
+                                               [21.0, 22.0, 23.0, ], ], ])))
+
     def test_solve(self):
         # Check solution methods
 
