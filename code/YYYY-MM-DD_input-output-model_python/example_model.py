@@ -3,9 +3,9 @@
 example_model
 =============
 Example implementation of a macroeconomic input-output model in Python, using
-economic data for Scotland ('Aggregate Tables 1998 to 2016'):
+economic data for Scotland ('Aggregate tables 1998 to 2017'):
 
-    https://www.gov.scot/publications/supply-use-input-output-tables-multipliers-scotland/
+    https://www.gov.scot/publications/input-output-latest/
 
 Download the data to this folder and run 'process_raw_data.py' first, to
 generate the input data (in 'data.txt').
@@ -59,7 +59,7 @@ class ScottishIOModel(BaseMDModel):
                        'Other services (RST)', ]
     }
 
-    # Conventions:
+    # Naming conventions (personal: none are enforced by the code):
     #  - uppercase letters e.g. Z : a matrix in period t
     #  - lowercase letters e.g. q : a vector in period t
     VARIABLES = {

@@ -3,9 +3,9 @@
 process_raw_data
 ================
 Extract the raw data from the input-output tables and form into a more
-convenient data file. Data are for Scotland ('Aggregate Tables 1998 to 2016'):
+convenient data file. Data are for Scotland ('Aggregate tables 1998 to 2017'):
 
-    https://www.gov.scot/publications/supply-use-input-output-tables-multipliers-scotland/
+    https://www.gov.scot/publications/input-output-latest/
 
 Figures are in £m.
 
@@ -48,8 +48,8 @@ industry_codes = ['A', 'B', 'C', 'D', 'E', 'F', 'GI', 'HJ', 'KL', 'MN', 'OPQ', '
 
 if __name__ == '__main__':
     # Read raw data tables ----------------------------------------------------
-    tables = pd.read_excel('input-output-1998-2016-aggtables.xlsx',
-                           sheet_name='Aggregate IxI 1998-2016',
+    tables = pd.read_excel('SUT-Agg-98-17.xlsx',
+                           sheet_name='Aggregate IxI 1998-2017',
                            skiprows=3)
 
     # The original file has a merged cell at the end that prevents pandas
