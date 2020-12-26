@@ -37,6 +37,7 @@ SOFTWARE.
 from typing import Any, Dict
 
 import numpy as np
+from pandas import DataFrame
 
 from iomodel import BaseMDModel
 import iomodel
@@ -83,6 +84,8 @@ class ScottishIOModel(BaseMDModel):
 
     def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
         # Sum of components of final demand
+        # (Time is always the first dimension/axis. All others follow the order
+        # in `VARIABLES`.)
         self._f[t] = (self._c[t] +
                       self._g[t] +
                       self._i[t] +
@@ -99,6 +102,7 @@ class ScottishIOModel(BaseMDModel):
 
 
 if __name__ == '__main__':
+    # Setup -------------------------------------------------------------------
     # Read input data
     with open('data.txt') as f:
         start_year, end_year = map(int, next(f).split())
@@ -109,13 +113,41 @@ if __name__ == '__main__':
     q = data.pop('q')  # q = L @ f
     Z = data.pop('Z')  # Intermediate consumption = A * q
 
-    # Set up the model and solve
-    model = ScottishIOModel(range(start_year, end_year + 1), **data)
-    model.solve()
+    # Baseline: Solve for historical values -----------------------------------
+    # Instantiate a model object with data and solve
+    baseline = ScottishIOModel(range(start_year, end_year + 1), **data)
+    baseline.solve()
 
     # Check results for output and intermediate consumption
-    assert model.q.shape == q.shape
-    assert np.allclose(model.q, q)
+    # (Model variables are accessible as object attributes.)
+    assert baseline.q.shape == q.shape
+    assert np.allclose(baseline.q, q)
 
-    assert model.Z.shape == Z.shape
-    assert np.allclose(model.Z, Z)
+    assert baseline.Z.shape == Z.shape
+    assert np.allclose(baseline.Z, Z)
+
+    # Scenario: Higher government spending ------------------------------------
+    # Copy the model instance to run an alternative scenario
+    scenario = baseline.copy()
+
+    # Increase government spending on government services by 1% in 2017
+    # Object indexing works as follows:
+    #  - the first index (required): the name of the variable e.g. 'g'
+    #  - the second index (optional; use `:` to select all items): the period label(s) e.g. 2017, 2015:2017 etc
+    #  - further indexes (optional): slice notation as per usual for NumPy arrays
+
+    # Last-but-one industry (index -2): 'Government, health and education'
+    scenario['g', 2017, -2] *= 1.01
+
+    # Solve
+    # (Only 2017 actually changes. Could've used `scenario.solve_period(2017)`)
+    scenario.solve()
+
+    # Compare total gross output (sum of `q`):
+    #  - figures should be identical over 1998-2016 (and match the data)
+    #  - total gross output in 2017 should be higher in the scenario, and by an
+    #    amount equal to the increase in government spending multiplied by the
+    #    corresponding column of the Leontief Inverse
+    print(DataFrame({'Baseline': baseline.q.sum(axis=1),
+                     'Scenario': scenario.q.sum(axis=1), },
+                    index=baseline.span).round())
