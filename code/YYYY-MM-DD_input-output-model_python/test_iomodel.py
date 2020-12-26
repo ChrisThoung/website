@@ -124,6 +124,14 @@ class TestMultiDimensionalContainer(unittest.TestCase):
         self.assertEqual(container['A'].shape, (2, 3, 4))
         self.assertTrue(np.allclose(container['A'], 1.5))
 
+    def test_contains(self):
+        # Test `in` (membership) operator
+        container = iomodel.MultiDimensionalContainer()
+        container.add_variable('A', np.full((2, 3, 4), 0.5))
+
+        self.assertIn('A', container)
+        self.assertNotIn('B', container)
+
     def test_key_errors(self):
         # Check that unrecognised variable names are caught
         container = iomodel.MultiDimensionalContainer()
@@ -403,6 +411,28 @@ class TestBaseMDModel(unittest.TestCase):
                                                [15.0, 16.0, 17.0, ], ],
                                               [[18.0, 19.0, 20.0, ],
                                                [21.0, 22.0, 23.0, ], ], ])))
+
+    def test_contains(self):
+        # Test `in` (membership) operator
+
+        class TestModel(iomodel.BaseMDModel):
+
+            VARIABLES = {
+                'X': (3, 4),
+                'Y': (4, 3),
+                'Z': (4, 3),
+            }
+
+        model = TestModel(range(10))
+
+        for name in ['X', 'Y', 'Z']:
+            with self.subTest(name=name):
+                self.assertIn(name, model)
+
+        self.assertNotIn('A', model)
+
+        self.assertNotIn('status', model)
+        self.assertNotIn('iterations', model)
 
     def test_solve(self):
         # Check solution methods

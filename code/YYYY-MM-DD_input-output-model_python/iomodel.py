@@ -214,6 +214,9 @@ class MultiDimensionalContainer:
 
         self.__setattr__(key, value)
 
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__['index']
+
     def copy(self) -> 'MultiDimensionalContainer':
         """Return a copy of the current object."""
         copied = self.__class__()
@@ -409,6 +412,9 @@ class BaseMDModel(MultiDimensionalContainer):
             return
 
         raise TypeError('Invalid index type ({}): `{}`'.format(type(key), key))
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__['names']
 
     def copy(self) -> 'BaseMDModel':
         """Return a copy of the current object."""
