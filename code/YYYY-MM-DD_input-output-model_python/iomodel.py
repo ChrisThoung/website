@@ -4,16 +4,14 @@ iomodel
 =======
 (Experimental) tools for macroeconomic input-output modelling.
 
-Large chunks of the `MultiDimensionalContainer` and `BaseMDModel` code have
-been adapted from the corresponding `VectorContainer` and `BaseModel` classes
-of FSIC (version 0.6.2):
+The code below builds on the latest release version (0.7.0.dev) of `fsic`:
 
-    https://github.com/ChrisThoung/fsic/tree/v0.6.2.dev
+    https://github.com/ChrisThoung/fsic/tree/v0.7.0.dev
 
 -------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2020 Chris Thoung
+Copyright (c) 2020-21 Chris Thoung
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -39,22 +37,17 @@ __version__ = '0.1.0.dev'
 
 import copy
 from typing import Any, Dict, Hashable, Iterator, List, Optional, Sequence, Tuple, Union
+import warnings
 
 import numpy as np
+
+from fsic import FSICError, DimensionError, DuplicateNameError, NonConvergenceError
+from fsic import SolverMixin
 
 
 # Custom exceptions -----------------------------------------------------------
 
-class IOModelError(Exception):
-    pass
-
-class DimensionError(IOModelError):
-    pass
-
-class DuplicateNameError(IOModelError):
-    pass
-
-class NonConvergenceError(IOModelError):
+class IOModelError(FSICError):
     pass
 
 class UndefinedDimensionError(IOModelError):
@@ -226,7 +219,9 @@ class MultiDimensionalContainer:
         return copied
 
     __copy__ = copy
-    __deepcopy__ = copy
+
+    def __deepcopy__(self, *args: Any, **kwargs: Any) -> 'MultiDimensionalContainer':
+        return self.copy()
 
     def __dir__(self) -> List[str]:
         return sorted(
@@ -238,7 +233,7 @@ class MultiDimensionalContainer:
 
 # Base class for individual models --------------------------------------------
 
-class BaseMDModel(MultiDimensionalContainer):
+class BaseMDModel(SolverMixin, MultiDimensionalContainer):
 
     DIMENSIONS: Dict[str, Sequence[str]] = {}
     VARIABLES: Dict[str, Union[str, Sequence[Union[str, int]], int]] = {}
@@ -268,14 +263,17 @@ class BaseMDModel(MultiDimensionalContainer):
         self.__dict__['span'] = span
 
         # Add solution tracking variables
-        self.add_variable('status', np.full(len(self.__dict__['span']), '-', dtype=str))
-        self.add_variable('iterations', np.full(len(self.__dict__['span']), -1, dtype=int))
+        super().add_variable('status', np.full(len(self.__dict__['span']), '-', dtype=str))
+        super().add_variable('iterations', np.full(len(self.__dict__['span']), -1, dtype=int))
 
         # Initialise model variables
-        dimension_lengths = {k: len(v) for k, v in self.DIMENSIONS.items()}
-
+        self.__dict__['dimensions'] = copy.deepcopy(self.DIMENSIONS)
+        self.__dict__['variables'] = copy.deepcopy(self.VARIABLES)
         self.__dict__['names'] = []
-        for name, dimensions in self.VARIABLES.items():
+
+        dimension_lengths = {k: len(v) for k, v in self.__dict__['dimensions'].items()}
+
+        for name, dimensions in self.__dict__['variables'].items():
             # If not already a sequence, convert to a one-element list
             if isinstance(dimensions, str) or not isinstance(dimensions, Sequence):
                 dimensions = [dimensions]
@@ -320,8 +318,86 @@ class BaseMDModel(MultiDimensionalContainer):
             else:
                 value = np.full(shape, value, dtype=dtype)
 
-            self.add_variable(name, value)
+            super().add_variable(name, value)
             self.__dict__['names'].append(name)
+
+    def add_variable(self, name: str, array: np.ndarray, *, broadcast: bool = False, dimensions: Optional[Sequence[Hashable]] = None) -> None:
+        """Add a new variable to the model.
+
+        Parameters
+        ----------
+        name : str
+            The name of the new variable, which must not already exist in the
+            container (raise a `DuplicateNameError` if the name already exists)
+        array : NumPy ndarray
+            Initial values for the new variable
+        broadcast : bool
+            If `False` (default), take `array` to be complete and insert as-is
+            into the object. The first/leftmost dimension must be of identical
+            length to the `span` attribute. Raise a `DimensionError` if not.
+            If `True`, take `array` to be the shape and values for a single
+            period. Repeat (broadcast) `array` as many times as needed to fill
+            out `span`.
+        dimensions : sequence of dimension names (*excluding* time/span)
+            If supplied, store these dimension labels to the `variables`
+            attribute. The labels should *exclude* time/span. Raise a
+            `DimensionError` if any named dimensions are missing from the
+            `dimensions` attribute.
+            If not supplied, just store the unlabelled dimension lengths to the
+            `variables` attribute.
+        """
+        # Broadcast the array to match `self.span` as needed
+        if broadcast:
+            array = np.array([array] * len(self.__dict__['span']))
+        else:
+            # No broadcasting: Check outer dimension is of the right length
+            if array.shape[0] != len(self.__dict__['span']):
+                raise DimensionError(
+                    "If `broadcast=False` (the default), the length of the first dimension of `array` ({}) "
+                    "must match the length of the object's `span` attribute ({}): {} != {}"
+                    .format(array.shape[0], len(self.__dict__['span']),
+                            array.shape[0], len(self.__dict__['span'])))
+
+        # Generate dimensions as needed
+        if dimensions is None:
+            dimensions = array.shape[1:]
+        else:
+            # Dimensions passed: Check validity
+            if len(dimensions) != (array.ndim - 1):
+                raise DimensionError(
+                    '`array` has {} ({}-1) non-`span` dimensions '
+                    'but `dimensions` has a different length ({}): '
+                    '{} != {}'.format(
+                        array.ndim - 1, array.ndim,
+                        len(dimensions),
+                        array.ndim - 1, len(dimensions)))
+
+            for i, (label, length) in enumerate(zip(dimensions, array.shape[1:])):
+                # `label` is an integer (dimension size rather than dimension
+                # label): Check it matches the corresponding dimension length
+                if isinstance(label, int):
+                    if label != length:
+                        raise DimensionError(
+                            '`dimension[{}]` is an integer with value {} '
+                            'but this differs from the corresponding dimension length '
+                            'of {} in `array`'.format(i, label, length))
+
+                # Check if `label` is defined in the current instance
+                elif label not in self.__dict__['dimensions']:
+                    raise DimensionError(
+                        "`dimension[{}]` has label '{}' but "
+                        "'{}' is not defined in the object's `dimensions` attribute"
+                        .format(i, label, label))
+
+        # All fine: Add the variable to the model instance
+        super().add_variable(name, array)
+        self.__dict__['variables'][name] = dimensions
+        self.__dict__['names'].append(name)
+
+    @property
+    def size(self) -> int:
+        """Total number of elements in the model's variable arrays."""
+        return sum(self.__dict__['_' + k].size for k in self.__dict__['names'])
 
     def __getitem__(self, key: Union[str, Tuple[str, Union[Hashable, slice]]]) -> Any:
         # `key` is a string (variable name): return the corresponding array
@@ -425,124 +501,48 @@ class BaseMDModel(MultiDimensionalContainer):
         return copied
 
     __copy__ = copy
-    __deepcopy__ = copy
+
+    def __deepcopy__(self, *args: Any, **kwargs: Any) -> 'BaseMDModel':
+        return self.copy()
 
     def __dir__(self) -> List[str]:
         return sorted(super().__dir__() + ['span'])
 
-    def iter_periods(self, *, start: Optional[Hashable] = None, end: Optional[Hashable] = None) -> Iterator[Tuple[int, Hashable]]:
-        """Return pairs of period indexes and labels.
-
-        Parameters
-        ----------
-        start : element in the model's `span`
-            First period to return. If not given, defaults to the first
-            solvable period, taking into account any lags in the model's
-            equations
-        end : element in the model's `span`
-            Last period to return. If not given, defaults to the last solvable
-            period, taking into account any leads in the model's equations
-        """
-        # Default start and end periods
-        if start is None:
-            start = self.span[self.LAGS]
-        if end is None:
-            end = self.span[-1 - self.LEADS]
-
-        # Convert to an integer range
-        indexes = range(self.span.index(start),
-                        self.span.index(end) + 1)
-
-        for t in indexes:
-            yield t, self.span[t]
-
-    def solve(self, *, start: Optional[Hashable] = None, end: Optional[Hashable] = None, max_iter: int = 100, tol: Union[int, float] = 1e-10, failures: str = 'raise', **kwargs: Dict[str, Any]) -> Tuple[List[Hashable], List[int], List[bool]]:
-        """Solve the model. Use default periods if none provided.
-
-        Parameters
-        ----------
-        start : element in the model's `span`
-            First period to solve. If not given, defaults to the first solvable
-            period, taking into account any lags in the model's equations
-        end : element in the model's `span`
-            Last period to solve. If not given, defaults to the last solvable
-            period, taking into account any leads in the model's equations
-        max_iter : int
-            Maximum number of iterations to solution each period
-        tol : int or float
-            Tolerance for convergence
-        failures : str, one of {'raise', 'ignore'}
-            Action should the solution fail to converge in a period (by
-            reaching the maximum number of iterations, `max_iter`)
-             - 'raise' (default): stop immediately and raise a
-                                  `NonConvergenceError`
-             - 'ignore': continue to the next period
-        kwargs :
-            Further keyword arguments to pass to the solution routines
-
-        Returns
-        -------
-        Three lists, each of length equal to the number of periods to be
-        solved:
-         - the names of the periods to be solved, as they appear in the model's
-           span
-         - integers: the index positions of the above periods in the model's
-           span
-         - bools, one per period: `True` if the period solved successfully;
-           `False` otherwise
-        """
-        indexes, labels = map(list, zip(*self.iter_periods(start=start, end=end)))
-        solved = [False] * len(indexes)
-
-        for i, t in enumerate(indexes):
-            solved[i] = self.solve_t(t, max_iter=max_iter, tol=tol, **kwargs)
-
-        return labels, indexes, solved
-
-    def solve_period(self, period: Hashable, *, max_iter: int = 100, tol: Union[int, float] = 1e-10, failures: str = 'raise', **kwargs: Dict[str, Any]) -> bool:
-        """Solve a single period.
-
-        Parameters
-        ----------
-        period : element in the model's `span`
-            Named period to solve
-        max_iter : int
-            Maximum number of iterations to solution each period
-        tol : int or float
-            Tolerance for convergence
-        failures : str, one of {'raise', 'ignore'}
-            Action should the solution fail to converge (by reaching the
-            maximum number of iterations, `max_iter`)
-             - 'raise' (default): stop immediately and raise a
-                                  `NonConvergenceError`
-             - 'ignore': do nothing
-        kwargs :
-            Further keyword arguments to pass to the solution routines
-
-        Returns
-        -------
-        `True` if the model solved for the current period; `False` otherwise.
-        """
-        t = self.span.index(period)
-        return self.solve_t(t, max_iter=max_iter, tol=tol, **kwargs)
-
-    def solve_t(self, t: int, *, max_iter: int = 100, tol: Union[int, float] = 1e-10, failures: str = 'raise', **kwargs: Dict[str, Any]) -> bool:
+    def solve_t(self, t: int, *, min_iter: int = 0, max_iter: int = 100, tol: Union[int, float] = 1e-10, offset: int = 0, failures: str = 'raise', errors: str = 'raise', **kwargs: Dict[str, Any]) -> bool:
         """Solve for the period at integer position `t` in the model's `span`.
 
         Parameters
         ----------
         t : int
             Position in `span` of the period to solve
+        min_iter : int
+            Minimum number of iterations to solution each period
         max_iter : int
             Maximum number of iterations to solution each period
         tol : int or float
             Tolerance for convergence
+        offset : int
+            If non-zero, copy an initial set of endogenous values from the
+            period at position `t + offset`. For example, `offset=-1` copies
+            the values from the previous period.
         failures : str, one of {'raise', 'ignore'}
             Action should the solution fail to converge (by reaching the
             maximum number of iterations, `max_iter`)
              - 'raise' (default): stop immediately and raise a
                                   `NonConvergenceError`
              - 'ignore': do nothing
+        errors : str, one of {'raise', 'skip', 'ignore', 'replace'}
+            User-specified treatment on encountering numerical solution errors
+            e.g. NaNs and infinities
+             - 'raise' (default): stop immediately and raise a `SolutionError`
+                                  [set period solution status to 'E']
+             - 'skip': stop solving the current period
+                       [set period solution status to 'S']
+             - 'ignore': continue solving, with no special treatment or action
+                         [period solution statuses as usual i.e. '.' or 'F']
+             - 'replace': each iteration, replace NaNs and infinities with
+                          zeroes
+                          [period solution statuses as usual i.e. '.' or 'F']
         kwargs :
             Further keyword arguments to pass to the solution routines
 
@@ -554,13 +554,40 @@ class BaseMDModel(MultiDimensionalContainer):
             """Return a dictionary of variables to check for convergence in the current period."""
             return {x: self[x][t] for x in self.CHECK}
 
+        # Error if `min_iter` exceeds `max_iter`
+        if min_iter > max_iter:
+            raise ValueError(
+                'Value of `min_iter` ({}) cannot exceed value of `max_iter` ({})'.format(
+                    min_iter, max_iter))
+
+        # Optionally copy initial values from another period
+        if offset:
+            raise NotImplementedError('`offset` not yet implemented')
+
         status = '-'
         current_values = get_check_values()
 
         for iteration in range(1, max_iter + 1):
             previous_values = copy.deepcopy(current_values)
-            self._evaluate(t, **kwargs)
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                self._evaluate(t, **kwargs)
+
+                # `errors` argument not implemented yet. For now, just fail if
+                # evaluation creates any problems
+                if len(w):
+                    raise NotImplementedError(
+                        'Solution encountered {} warning(s) '
+                        'after {} iterations(s) '
+                        'in period with label: {} (index: {}). '
+                        'Solution error handling not yet implemented.'
+                        .format(len(w), iteration, self.span[t], t))
+
             current_values = get_check_values()
+
+            if iteration < min_iter:
+                continue
 
             converged = {x: False for x in current_values.keys()}
             for k in converged.keys():
@@ -582,10 +609,7 @@ class BaseMDModel(MultiDimensionalContainer):
                 'in period with label: {} (index: {})'
                 .format(iteration, self.span[t], t))
 
-        if status == '.':
-            return True
-        else:
-            return False
+        return status == '.'
 
     def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
         """Evaluate the system of equations for the period at integer position `t` in the model's `span`.

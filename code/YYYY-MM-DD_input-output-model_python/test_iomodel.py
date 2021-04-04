@@ -7,7 +7,7 @@ Test suite for `iomodel` module.
 -------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2020 Chris Thoung
+Copyright (c) 2020-21 Chris Thoung
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import copy
 import io
 import os
 from typing import Any, Dict
@@ -412,6 +413,21 @@ class TestBaseMDModel(unittest.TestCase):
                                               [[18.0, 19.0, 20.0, ],
                                                [21.0, 22.0, 23.0, ], ], ])))
 
+    def test_size(self):
+        # Check that the model correctly counts the number of elements in the
+        # variable arrays
+
+        class TestModel(iomodel.BaseMDModel):
+
+            VARIABLES = {
+                'X': (3, 4),
+                'Y': (4, 3),
+                'Z': (4, 3),
+            }
+
+        model = TestModel(range(10))
+        self.assertEqual(model.size, 360)
+
     def test_contains(self):
         # Test `in` (membership) operator
 
@@ -470,7 +486,7 @@ class TestBaseMDModel(unittest.TestCase):
         self.assertEqual(model.Z.shape, (2, 4, 3))
         self.assertTrue(np.allclose(model.Z, 5.0))
 
-    def test_copy(self):
+    def test_copy_method(self):
         # Check that taking a copy and operating on the original leaves the
         # copy unchanged
 
@@ -486,7 +502,7 @@ class TestBaseMDModel(unittest.TestCase):
                 self._Y[t] = 1 + self._X[t].T * 2 + self._Z[t]
 
         model = TestModel(range(2), X=0.5, Z=np.full((2, 4, 3), 5.0))
-        copy = model.copy()
+        copied = model.copy()
 
         self.assertEqual(model.X.shape, (2, 3, 4))
         self.assertTrue(np.allclose(model.X, 0.5))
@@ -498,14 +514,14 @@ class TestBaseMDModel(unittest.TestCase):
         self.assertTrue(np.allclose(model.Z, 5.0))
 
         # Copy is identical at this point
-        self.assertEqual(copy.X.shape, (2, 3, 4))
-        self.assertTrue(np.allclose(copy.X, 0.5))
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
 
-        self.assertEqual(copy.Y.shape, (2, 4, 3))
-        self.assertTrue(np.allclose(copy.Y, 0.0))
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
 
-        self.assertEqual(copy.Z.shape, (2, 4, 3))
-        self.assertTrue(np.allclose(copy.Z, 5.0))
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
 
         model.solve()
 
@@ -519,14 +535,202 @@ class TestBaseMDModel(unittest.TestCase):
         self.assertTrue(np.allclose(model.Z, 5.0))
 
         # Copy is unchanged
-        self.assertEqual(copy.X.shape, (2, 3, 4))
-        self.assertTrue(np.allclose(copy.X, 0.5))
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
 
-        self.assertEqual(copy.Y.shape, (2, 4, 3))
-        self.assertTrue(np.allclose(copy.Y, 0.0))
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
 
-        self.assertEqual(copy.Z.shape, (2, 4, 3))
-        self.assertTrue(np.allclose(copy.Z, 5.0))
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
+
+    def test_copy_dunder_method(self):
+        # Check that taking a copy and operating on the original leaves the
+        # copy unchanged
+
+        class TestModel(iomodel.BaseMDModel):
+
+            VARIABLES = {
+                'X': (3, 4),
+                'Y': (4, 3),
+                'Z': (4, 3),
+            }
+
+            def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+                self._Y[t] = 1 + self._X[t].T * 2 + self._Z[t]
+
+        model = TestModel(range(2), X=0.5, Z=np.full((2, 4, 3), 5.0))
+        copied = copy.copy(model)
+
+        self.assertEqual(model.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(model.X, 0.5))
+
+        self.assertEqual(model.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Y, 0.0))
+
+        self.assertEqual(model.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Z, 5.0))
+
+        # Copy is identical at this point
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
+
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
+
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
+
+        model.solve()
+
+        self.assertEqual(model.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(model.X, 0.5))
+
+        self.assertEqual(model.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Y, 7.0))
+
+        self.assertEqual(model.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Z, 5.0))
+
+        # Copy is unchanged
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
+
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
+
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
+
+    def test_deepcopy_dunder_method(self):
+        # Check that taking a copy and operating on the original leaves the
+        # copy unchanged
+
+        class TestModel(iomodel.BaseMDModel):
+
+            VARIABLES = {
+                'X': (3, 4),
+                'Y': (4, 3),
+                'Z': (4, 3),
+            }
+
+            def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+                self._Y[t] = 1 + self._X[t].T * 2 + self._Z[t]
+
+        model = TestModel(range(2), X=0.5, Z=np.full((2, 4, 3), 5.0))
+        copied = copy.deepcopy(model)
+
+        self.assertEqual(model.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(model.X, 0.5))
+
+        self.assertEqual(model.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Y, 0.0))
+
+        self.assertEqual(model.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Z, 5.0))
+
+        # Copy is identical at this point
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
+
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
+
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
+
+        model.solve()
+
+        self.assertEqual(model.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(model.X, 0.5))
+
+        self.assertEqual(model.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Y, 7.0))
+
+        self.assertEqual(model.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(model.Z, 5.0))
+
+        # Copy is unchanged
+        self.assertEqual(copied.X.shape, (2, 3, 4))
+        self.assertTrue(np.allclose(copied.X, 0.5))
+
+        self.assertEqual(copied.Y.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Y, 0.0))
+
+        self.assertEqual(copied.Z.shape, (2, 4, 3))
+        self.assertTrue(np.allclose(copied.Z, 5.0))
+
+    def test_add_variable(self):
+        # Check `add_variable()` correctly extends the model store, leaving
+        # other model instances unchanged
+
+        class TestModel(iomodel.BaseMDModel):
+
+            VARIABLES = {
+                'A': (2, 3),
+                'B': (2, 4),
+                'C': (3, 4),
+            }
+
+        model = TestModel(range(5))
+        self.assertEqual(model.names, ['A', 'B', 'C'])
+        self.assertEqual(model.size, 130)
+
+        # Copy should be identical to the original
+        copied = model.copy()
+        self.assertEqual(copied.names, ['A', 'B', 'C'])
+        self.assertEqual(copied.size, 130)
+
+        # Add new variables to the original
+        model.add_variable('D', np.zeros((5, 2, 5)))
+        self.assertEqual(model.names, ['A', 'B', 'C', 'D'])
+        self.assertEqual(model.size, 180)
+
+        # `broadcast=True` expands the variable to match the model's `span`
+        model.add_variable('E', np.zeros((3, 5)), broadcast=True)
+        self.assertEqual(model.names, ['A', 'B', 'C', 'D', 'E'])
+        self.assertEqual(model.size, 255)
+
+        # Copy should remain unchanged
+        self.assertEqual(copied.names, ['A', 'B', 'C'])
+        self.assertEqual(copied.size, 130)
+
+        # A completely new instance should match both the original and the copy
+        separate = TestModel(range(5))
+        self.assertEqual(separate.names, ['A', 'B', 'C'])
+        self.assertEqual(separate.size, 130)
+
+    def test_add_variable_span_error(self):
+        # Check that `add_variable()` raises an exception if the first
+        # dimension is of a different length to the model's `span`
+        model = iomodel.BaseMDModel(range(10))
+
+        with self.assertRaises(iomodel.DimensionError):
+            model.add_variable('A', np.zeros((3, 4)))
+
+    def test_add_variable_inconsistent_number_of_dimensions_error(self):
+        # Check that `add_variable()` raises an exception if the number of
+        # stated dimensions is different to the number of actual dimensions
+        model = iomodel.BaseMDModel(range(10))
+
+        with self.assertRaises(iomodel.DimensionError):
+            model.add_variable('A', np.zeros((10, 2, 3)), dimensions=['A', 'B', 'C'])
+
+    def test_add_variable_wrong_dimension_size_error(self):
+        # Check that `add_variable()` raises an exception if the stated
+        # dimension length differs from the actual one
+        model = iomodel.BaseMDModel(range(10))
+
+        with self.assertRaises(iomodel.DimensionError):
+            model.add_variable('A', np.zeros((10, 2, 3)), dimensions=(2, 4))
+
+    def test_add_variable_unrecognised_dimension_error(self):
+        # Check that `add_variable()` raises an exception if the stated
+        # dimension labels are missing from the model's `dimensions` variable
+        model = iomodel.BaseMDModel(range(10))
+
+        with self.assertRaises(iomodel.DimensionError):
+            model.add_variable('A', np.zeros((10, 2, 3)), dimensions=(2, 'X'))
 
 
 if __name__ == '__main__':
