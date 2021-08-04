@@ -4,9 +4,9 @@ iomodel
 =======
 (Experimental) tools for macroeconomic input-output modelling.
 
-The code below builds on the latest release version (0.7.0.dev) of `fsic`:
+The code below builds on the latest release version (0.7.1.dev) of `fsic`:
 
-    https://github.com/ChrisThoung/fsic/tree/v0.7.0.dev
+    https://github.com/ChrisThoung/fsic/tree/v0.7.1.dev
 
 -------------------------------------------------------------------------------
 MIT License
