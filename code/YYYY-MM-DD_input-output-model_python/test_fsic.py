@@ -23,7 +23,7 @@ programs:
 -------------------------------------------------------------------------------
 Copied from:
 
-    https://github.com/ChrisThoung/fsic/tree/v0.7.0.dev
+    https://github.com/ChrisThoung/fsic/tree/v0.7.1.dev
 
 Licence reproduced below.
 
@@ -202,6 +202,25 @@ H = (H[-1] +
 
         self.assertEqual(fsic.parse_equation(equation), expected)
 
+    def test_parse_equation_empty(self):
+        # Check that `parse_equation()` returns an empty list if the equation
+        # string is empty
+        self.assertEqual(fsic.parse_equation(''), [])
+        self.assertEqual(fsic.parse_equation(' '), [])
+
+    def test_parse_equation_multiple_equations_error(self):
+        # Check that `parse_equation()` raises a `ParserError` if a string
+        # doesn't define a single equation
+        with self.assertRaises(fsic.ParserError):
+            fsic.parse_equation('A = B\nC = D')
+
+    def test_parse_equation_indentation_error(self):
+        # Check that `parse_equation()` behaves identically to `parse_model()`
+        # and raises an `IndentationError` if there's any leading whitespace in
+        # an equation string
+        with self.assertRaises(IndentationError):
+            fsic.parse_equation(' Y = C + G')
+
     def test_parse_equation_function_replacement(self):
         # Check that function replacement only applies to functions explicitly
         # defined in `fsic.replacement_function_names`. For example:
@@ -315,6 +334,12 @@ B = f(C, D)    # But here, C is an exogenous variable
 A = f(B, C, D)  # C is an exogenous variable
 B = f(<C>, D)   # But here, C is an error
 ''')
+
+    def test_leading_whitespace(self):
+        # Check that an equation with unnecessary leading whitespace raises an
+        # `IndentationError`
+        with self.assertRaises(IndentationError):
+            fsic.parse_model(' Y = C + I + G + X - M')
 
 
 class TestVectorContainer(unittest.TestCase):
@@ -735,7 +760,7 @@ class TestBuild(unittest.TestCase):
     LAGS: int = 0
     LEADS: int = 0
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         pass'''
 
         symbols = fsic.parse_model('Y = C + G')
@@ -761,7 +786,7 @@ class TestBuild(unittest.TestCase):
     LAGS = 0
     LEADS = 0
 
-    def _evaluate(self, t, **kwargs):
+    def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
         # Y[t] = C[t] + I[t] + G[t] + X[t] - M[t]
         self._Y[t] = self._C[t] + self._I[t] + self._G[t] + self._X[t] - self._M[t]'''
 
@@ -783,7 +808,7 @@ class TestBuild(unittest.TestCase):
     LAGS: int = 0
     LEADS: int = 0
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         pass'''
 
         symbols = fsic.parse_model('')
@@ -805,7 +830,7 @@ class TestBuild(unittest.TestCase):
     LAGS: int = 0
     LEADS: int = 0
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         # Y[t] = X[t] if X[t] > Z[t] else Z[t]
         self._Y[t] = self._X[t] if self._X[t] > self._Z[t] else self._Z[t]'''
 
@@ -828,7 +853,7 @@ class TestBuild(unittest.TestCase):
     LAGS: int = 0
     LEADS: int = 0
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         # Y[t] = X[t]
         _ = self._X[t]
         if np.isfinite(_):
@@ -1036,6 +1061,20 @@ H = H[-1] + YD - C
 
     def setUp(self):
         self.Model = fsic.build_model(self.SYMBOLS)
+
+    def test_solve_keyword_passthrough(self):
+        # Check that keyword arguments pass through the solution stack without
+        # triggering any errors
+        model = self.Model(range(10))
+        model.solve(custom_keyword=True)
+
+    def test_solve_t_keyword_passthrough(self):
+        # Check that keyword arguments pass through the solution stack without
+        # triggering any errors
+        model = self.Model(range(10))
+
+        for t, _ in model.iter_periods():
+            model.solve_t(t, custom_keyword=True)
 
     def test_solve_t_negative(self):
         # Check support for negative values of `t` in `solve_t()`
@@ -1249,7 +1288,389 @@ H = H[-1] + YD - C
             model.solve_t(1, min_iter=10, max_iter=5)
 
 
+class TestCustomModel(unittest.TestCase):
+
+    SCRIPT = '''
+s = 1 - (C / YD)  # Unless handled, this equation will generate a NaN on the first iteration
+C = {alpha_1} * YD + {alpha_2} * H[-1]
+YD = Y - T
+Y = C + G
+T = {theta} * Y
+H = H[-1] + YD - C
+'''
+    SYMBOLS = fsic.parse_model(SCRIPT)
+
+    # Tolerance for absolute differences to be considered almost equal
+    DELTA = 0.05
+
+    def setUp(self):
+
+        def custom_converter(symbol):
+            lhs, _ = map(str.strip, symbol.code.split('=', maxsplit=1))
+            return '''\
+# {}
+with warnings.catch_warnings():
+    warnings.simplefilter('error')
+
+    try:
+        {}
+
+    except RuntimeWarning:
+        if errors == 'raise':
+            {} = np.nan
+            self.status[t] = 'E'
+            self.iterations[t] = iteration
+
+            raise SolutionError(
+                'Numerical solution error after {{}} iterations(s) '
+                'in period with label: {{}} (index: {{}})'
+                .format(iteration, self.span[t], t))
+
+        elif errors == 'skip':
+            {} = np.nan
+            return
+
+        elif errors == 'ignore':
+            {} = np.nan
+
+        elif errors == 'replace':
+            {} = 0
+
+        else:
+            raise ValueError('Invalid `errors` argument: {{}}'.format(errors))'''.format(
+                symbol.equation, symbol.code, lhs, lhs, lhs, lhs)
+
+        self.Model = fsic.build_model(self.SYMBOLS, converter=custom_converter)
+
+    def test_custom_solve_raise(self):
+        # Check that the custom code leads to a `SolutionError` in the absence
+        # of any alternative error handling
+        model = self.Model(range(1945, 2010 + 1),
+                           alpha_1=0.6, alpha_2=0.4, G=20, theta=0.2)
+
+        with self.assertRaises(fsic.SolutionError):
+            model.solve()
+
+        # `s` should have generated a NaN
+        self.assertTrue(np.isclose(model.s[0], 0))
+        self.assertTrue(np.isnan(model.s[1]))
+        self.assertTrue(np.allclose(model.s[2:], 0))
+
+        # The `SolutionError` should be recorded in `status`
+        self.assertEqual(model.status[0], '-')
+        self.assertEqual(model.status[1], 'E')
+        self.assertTrue(np.all(model.status[2:] == '-'))
+
+        # The single pass in `iterations` should also be recorded
+        self.assertEqual(model.iterations[0], -1)
+        self.assertEqual(model.iterations[1], 1)
+        self.assertTrue(np.all(model.iterations[2:] == -1))
+
+        # All other values should be unchanged
+        for x in ['C', 'YD', 'Y', 'T', 'H']:
+            self.assertTrue(np.allclose(model[x], 0))
+
+        self.assertTrue(np.allclose(model.alpha_1, 0.6))
+        self.assertTrue(np.allclose(model.alpha_2, 0.4))
+        self.assertTrue(np.allclose(model.G, 20))
+        self.assertTrue(np.allclose(model.theta, 0.2))
+
+    def test_custom_solve_skip(self):
+        # Check that the custom code correctly skips on the first iteration of
+        # each period
+        model = self.Model(range(1945, 2010 + 1),
+                           alpha_1=0.6, alpha_2=0.4, G=20, theta=0.2)
+
+        model.solve(errors='skip')
+
+        # `s` should just be NaNs
+        self.assertTrue(np.isclose(model.s[0], 0))
+        self.assertTrue(np.all(np.isnan(model.s[1:])))
+
+        # Solution status should indicate [S]kipped
+        self.assertEqual(model.status[0], '-')
+        self.assertTrue(np.all(model.status[1:] == 'S'))
+
+        # Just one iteration per period
+        self.assertEqual(model.iterations[0], -1)
+        self.assertTrue(np.all(model.iterations[1:] == 1))
+
+        # All other values should be unchanged
+        for x in ['C', 'YD', 'Y', 'T', 'H']:
+            self.assertTrue(np.allclose(model[x], 0))
+
+        self.assertTrue(np.allclose(model.alpha_1, 0.6))
+        self.assertTrue(np.allclose(model.alpha_2, 0.4))
+        self.assertTrue(np.allclose(model.G, 20))
+        self.assertTrue(np.allclose(model.theta, 0.2))
+
+    def test_custom_solve_ignore(self):
+        # Check that the custom code solves as usual with `errors='ignore'`
+        model = self.Model(range(1945, 2010 + 1),
+                           alpha_1=0.6, alpha_2=0.4, G=20, theta=0.2)
+
+        model._evaluate(1, errors='ignore')
+        self.assertTrue(np.isnan(model.s[1]))
+
+        model.solve(errors='ignore')
+
+        # `s` should be entirely non-NaN
+        self.assertFalse(np.any(np.isnan(model.s)))
+
+        # The other model variables should have converged to their stationary
+        # state values
+        self.assertAlmostEqual(model.C[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.YD[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.H[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.Y[-1], 100, delta=self.DELTA)
+        self.assertAlmostEqual(model.T[-1], 20, delta=self.DELTA)
+
+    def test_custom_solve_replace(self):
+        # Check that the custom code solves as usual with `errors='replace'`
+        model = self.Model(range(1945, 2010 + 1),
+                           alpha_1=0.6, alpha_2=0.4, G=20, theta=0.2)
+
+        model._evaluate(1, errors='replace')
+        self.assertAlmostEqual(model.s[1], 0)
+
+        model.solve(errors='replace')
+
+        # `s` should be entirely non-NaN
+        self.assertFalse(np.any(np.isnan(model.s)))
+
+        # The other model variables should have converged to their stationary
+        # state values
+        self.assertAlmostEqual(model.C[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.YD[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.H[-1], 80, delta=self.DELTA)
+        self.assertAlmostEqual(model.Y[-1], 100, delta=self.DELTA)
+        self.assertAlmostEqual(model.T[-1], 20, delta=self.DELTA)
+
+
+class TestCustomOverrides(unittest.TestCase):
+
+    def test_evaluate_error(self):
+        # Check that `solve_t()` can catch errors raised in `_evaluate()`
+
+        class Model(fsic.BaseModel):
+            def _evaluate(self, t, *args, **kwargs):
+                # In base Python, this raises a `ZeroDivisionError`
+                x = 1 / 0
+
+        model = Model(range(5))
+
+        with self.assertRaises(fsic.SolutionError):
+            model.solve()
+
+
+    class RegularModel(fsic.BaseModel):
+        """Standard model setup as produced by `fsic` `parse_model()` and `build_model()`."""
+        ENDOGENOUS = ['G', 'C', 'YD', 'H', 'Y', 'T']
+        EXOGENOUS = ['G_bar']
+
+        PARAMETERS = ['alpha_1', 'alpha_2', 'theta']
+        ERRORS = []
+
+        NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
+        CHECK = ENDOGENOUS
+
+        LAGS = 1
+        LEADS = 0
+
+        def _evaluate(self, t: int, *, errors='raise', iteration=None, **kwargs):
+            # G[t] = G_bar[t]
+            self._G[t] = self._G_bar[t]
+
+            # C[t] = alpha_1[t] * YD[t] + alpha_2[t] * H[t-1]
+            self._C[t] = self._alpha_1[t] * self._YD[t] + self._alpha_2[t] * self._H[t-1]
+
+            # YD[t] = Y[t] - T[t]
+            self._YD[t] = self._Y[t] - self._T[t]
+
+            # H[t] = H[t-1] + YD[t] - C[t]
+            self._H[t] = self._H[t-1] + self._YD[t] - self._C[t]
+
+            # Y[t] = C[t] + G[t]
+            self._Y[t] = self._C[t] + self._G[t]
+
+            # T[t] = theta[t] * Y[t]
+            self._T[t] = self._theta[t] * self._Y[t]
+
+    class BeforeModel(fsic.BaseModel):
+        """Variant on `RegularModel` but with an over-riding `solve_t_before()` method."""
+        ENDOGENOUS = ['G', 'C', 'YD', 'H', 'Y', 'T']
+        EXOGENOUS = ['G_bar']
+
+        PARAMETERS = ['alpha_1', 'alpha_2', 'theta']
+        ERRORS = []
+
+        NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
+        CHECK = ENDOGENOUS
+
+        LAGS = 1
+        LEADS = 0
+
+        def solve_t_before(self, t, *args, **kwargs):
+            # G[t] = G_bar[t]
+            self._G[t] = self._G_bar[t]
+
+        def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
+            # C[t] = alpha_1[t] * YD[t] + alpha_2[t] * H[t-1]
+            self._C[t] = self._alpha_1[t] * self._YD[t] + self._alpha_2[t] * self._H[t-1]
+
+            # YD[t] = Y[t] - T[t]
+            self._YD[t] = self._Y[t] - self._T[t]
+
+            # H[t] = H[t-1] + YD[t] - C[t]
+            self._H[t] = self._H[t-1] + self._YD[t] - self._C[t]
+
+            # Y[t] = C[t] + G[t]
+            self._Y[t] = self._C[t] + self._G[t]
+
+            # T[t] = theta[t] * Y[t]
+            self._T[t] = self._theta[t] * self._Y[t]
+
+    class AfterModel(fsic.BaseModel):
+        """Variant on `RegularModel` but with an over-riding `solve_t_after()` method."""
+        ENDOGENOUS = ['G', 'C', 'YD', 'H', 'Y', 'T']
+        EXOGENOUS = ['G_bar']
+
+        PARAMETERS = ['alpha_1', 'alpha_2', 'theta']
+        ERRORS = []
+
+        NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
+        CHECK = ENDOGENOUS
+
+        LAGS = 1
+        LEADS = 0
+
+        def solve_t_after(self, t, *args, **kwargs):
+            # H[t] = H[t-1] + YD[t] - C[t]
+            self._H[t] = self._H[t-1] + self._YD[t] - self._C[t]
+
+        def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
+            # G[t] = G_bar[t]
+            self._G[t] = self._G_bar[t]
+
+            # C[t] = alpha_1[t] * YD[t] + alpha_2[t] * H[t-1]
+            self._C[t] = self._alpha_1[t] * self._YD[t] + self._alpha_2[t] * self._H[t-1]
+
+            # YD[t] = Y[t] - T[t]
+            self._YD[t] = self._Y[t] - self._T[t]
+
+            # Y[t] = C[t] + G[t]
+            self._Y[t] = self._C[t] + self._G[t]
+
+            # T[t] = theta[t] * Y[t]
+            self._T[t] = self._theta[t] * self._Y[t]
+
+    class BeforeAndAfterModel(fsic.BaseModel):
+        """Variant on `RegularModel` but with over-riding `solve_t_before()` and `solve_t_after()` methods."""
+        ENDOGENOUS = ['G', 'C', 'YD', 'H', 'Y', 'T']
+        EXOGENOUS = ['G_bar']
+
+        PARAMETERS = ['alpha_1', 'alpha_2', 'theta']
+        ERRORS = []
+
+        NAMES = ENDOGENOUS + EXOGENOUS + PARAMETERS + ERRORS
+        CHECK = ENDOGENOUS
+
+        LAGS = 1
+        LEADS = 0
+
+        def solve_t_before(self, t, *args, **kwargs):
+            # G[t] = G_bar[t]
+            self._G[t] = self._G_bar[t]
+
+        def solve_t_after(self, t, *args, **kwargs):
+            # H[t] = H[t-1] + YD[t] - C[t]
+            self._H[t] = self._H[t-1] + self._YD[t] - self._C[t]
+
+        def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
+            # C[t] = alpha_1[t] * YD[t] + alpha_2[t] * H[t-1]
+            self._C[t] = self._alpha_1[t] * self._YD[t] + self._alpha_2[t] * self._H[t-1]
+
+            # YD[t] = Y[t] - T[t]
+            self._YD[t] = self._Y[t] - self._T[t]
+
+            # Y[t] = C[t] + G[t]
+            self._Y[t] = self._C[t] + self._G[t]
+
+            # T[t] = theta[t] * Y[t]
+            self._T[t] = self._theta[t] * self._Y[t]
+
+
+    def test_evaluate_before(self):
+        # Check that a model amended to carry out some pre-solution calculation
+        # produces the same results as the regular model
+        regular_model = self.RegularModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        regular_model.solve()
+
+        before_model = self.BeforeModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        before_model.solve()
+
+        # Quick check that results match expected results
+        self.assertAlmostEqual(regular_model.Y[-1], 100.0, places=2)
+
+        # Check model results are identical
+        self.assertTrue(np.allclose(regular_model.values, before_model.values))
+
+    def test_evaluate_after(self):
+        # Check that a model amended to carry out some post-solution calculation
+        # produces the same results as the regular model
+        regular_model = self.RegularModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        regular_model.solve()
+
+        after_model = self.AfterModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        after_model.solve()
+
+        # Quick check that results match expected results
+        self.assertAlmostEqual(regular_model.Y[-1], 100.0, places=2)
+
+        # Check model results are identical
+        self.assertTrue(np.allclose(regular_model.values, after_model.values))
+
+    def test_evaluate_before_and_after(self):
+        # Check that a model amended to carry out some pre- and post-solution
+        # calculations produces the same results as the regular model
+        regular_model = self.RegularModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        regular_model.solve()
+
+        before_after_model = self.BeforeAndAfterModel(range(1945, 2010 + 1), alpha_1=0.6, alpha_2=0.4, G_bar=20, theta=0.2)
+        before_after_model.solve()
+
+        # Quick check that results match expected results
+        self.assertAlmostEqual(regular_model.Y[-1], 100.0, places=2)
+
+        # Check model results are identical
+        self.assertTrue(np.allclose(regular_model.values, before_after_model.values))
+
+
 class TestParserErrors(unittest.TestCase):
+
+    def test_invalid_index(self):
+        # Check that the parser can detect an invalid index
+        with self.assertRaises(fsic.ParserError):
+            # In the index, '1' and '-' are the wrong way around
+            fsic.parse_model('A = A[1-]')
+
+    def test_missing_closing_bracket(self):
+        # Check that the parser can detect a missing closing bracket
+        with self.assertRaises(fsic.ParserError):
+            # Missing closing bracket at the end of the string below
+            fsic.parse_model('Y = C + I + G + (X - M')
+
+    def test_misplaced_closing_bracket(self):
+        # Check that the parser can detect a closing bracket without an
+        # accompanying prior open bracket
+        with self.assertRaises(fsic.ParserError):
+            fsic.parse_model('Y = C + I + G +)X - M')
+
+        with self.assertRaises(fsic.ParserError):
+            fsic.parse_model('Y = C + I + G +)X - M)')
+
+        with self.assertRaises(fsic.ParserError):
+            fsic.parse_model('Y = C + I + G +)X - M(')
 
     def test_extra_equals_single_equation(self):
         with self.assertRaises(fsic.ParserError):

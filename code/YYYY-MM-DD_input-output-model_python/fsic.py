@@ -7,7 +7,7 @@ Tools for macroeconomic modelling in Python.
 -------------------------------------------------------------------------------
 Copied from:
 
-    https://github.com/ChrisThoung/fsic/tree/v0.7.0.dev
+    https://github.com/ChrisThoung/fsic/tree/v0.7.1.dev
 
 Licence reproduced below.
 
@@ -35,7 +35,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.7.0.dev'
+__version__ = '0.7.1.dev'
 
 
 import copy
@@ -63,6 +63,9 @@ class DimensionError(FSICError):
     pass
 
 class DuplicateNameError(FSICError):
+    pass
+
+class EvalError(FSICError):
     pass
 
 class InitialisationError(FSICError):
@@ -298,6 +301,10 @@ def split_equations_iter(model: str) -> Iterator[str]:
             elif char == ')':
                 unmatched_parentheses -= 1
 
+            if unmatched_parentheses < 0:
+                raise ParserError('Found closing bracket before opening bracket '
+                                  'while attempting to read the following: {}'.format('\n'.join(buffer)))
+
         # If complete, combine and yield
         if unmatched_parentheses == 0:
             # Combine into a single string
@@ -309,12 +316,30 @@ def split_equations_iter(model: str) -> Iterator[str]:
                 match = equation_re.search(equation)
 
                 if not match:
-                    raise ParserError('Failed to parse equation: {}'.format(equation))
+                    # A failed match could occur because of unnecessary leading
+                    # whitespace in the equation expression. Check for this and
+                    # raise a slightly more helpful error if so
+                    match = equation_re.search(equation.strip())
+
+                    # Not compatible with Python 3.6: `if isinstance(match, re.Match):`
+                    if match is not None:
+                        raise IndentationError(
+                            "Found unnecessary leading whitespace in equation: '{}'"
+                            .format(equation))
+
+                    # Otherwise, raise the general error
+                    raise ParserError("Failed to parse equation: '{}'".format(equation))
 
                 yield equation
 
             # Reset the buffer to collect another equation
             buffer = []
+
+    # If `unmatched_parentheses` is non-zero at this point, there must have
+    # been an error in the input script's syntax. Throw an error
+    if unmatched_parentheses != 0:
+        raise ParserError('Failed to identify any equations in the following, '
+                          'owing to unmatched brackets: {}'.format('\n'.join(buffer)))
 
 def split_equations(model: str) -> List[str]:
     """Return the equations of `model` as a list of strings."""
@@ -341,7 +366,12 @@ def parse_terms(expression: str) -> List[Term]:
         if type_key not in ('_FUNCTION', '_KEYWORD'):
             if index_ is None:
                 index_ = '0'
-            index = int(index_)
+
+            try:
+                index = int(index_)
+            except ValueError:
+                raise ParserError("Unable to parse index '{}' of '{}' in '{}'".format(
+                    index_, match.group(0), expression))
 
         return Term(name=groupdict[type_key],
                     type=Type[type_key[1:]],
@@ -362,8 +392,19 @@ def parse_equation_terms(equation: str) -> List[Term]:
 
     left, right = equation.split('=', maxsplit=1)
 
-    lhs_terms = [replace_type(t, Type.ENDOGENOUS) for t in parse_terms(left)]
-    rhs_terms = [replace_type(t, Type.EXOGENOUS) for t in parse_terms(right)]
+    try:
+        lhs_terms = [replace_type(t, Type.ENDOGENOUS) for t in parse_terms(left)]
+    except ParserError:
+        # Catch any parser errors at a term level and raise a further exception
+        # to print the expression that failed
+        raise ParserError("Failed to parse left-hand side of: '{}'".format(equation))
+
+    try:
+        rhs_terms = [replace_type(t, Type.EXOGENOUS) for t in parse_terms(right)]
+    except ParserError:
+        # Catch any parser errors at a term level and raise a further exception
+        # to print the expression that failed
+        raise ParserError("Failed to parse right-hand side of: '{}'".format(equation))
 
     if (any(filter(lambda x: x.type == Type.KEYWORD, lhs_terms)) or
         any(filter(lambda x: x.type == Type.INVALID, rhs_terms))):
@@ -376,6 +417,18 @@ def parse_equation_terms(equation: str) -> List[Term]:
 
 def parse_equation(equation: str) -> List[Symbol]:
     """Return the symbols of `equation` as a list of Symbol objects."""
+    # Return an empty list if the string is empty / pure whitespace
+    if len(equation.strip()) == 0:
+        return []
+
+    # Use `split_equations()` to check that the expression is valid and only
+    # contains one equation
+    equations = split_equations(equation)
+    if len(equations) != 1:
+        raise ParserError(
+            '`parse_equation()` expects a string that defines a single equation '
+            'but found {} instead'.format(len(equations)))
+
     terms = parse_equation_terms(equation)
 
     # Construct standardised and code representations of the equation
@@ -508,6 +561,64 @@ def parse_model(model: str, *, check_syntax: bool = True) -> List[Symbol]:
 # Labelled container for vector data (1D NumPy arrays) ------------------------
 
 class VectorContainer:
+    """Labelled container for vector data (1D NumPy arrays).
+
+    Examples
+    --------
+    # Initialise an object with a span that attaches labels to the vector
+    # elements; here: 11-element vectors labelled [2000, 2001, ..., 2009, 2010]
+    >>> container = VectorContainer(range(2000, 2010 + 1))
+
+    # Add some data, each with a fixed dtype (as in NumPy/pandas)
+    # `VectorContainer`s automatically broadcast scalar values to vectors of
+    # the previously specified length
+    >>> container.add_variable('A', 2)                                        # Integer
+    >>> container.add_variable('B', 3.0)                                      # Float
+    >>> container.add_variable('C', list(range(10 + 1)), dtype=float)         # Force as floats
+    >>> container.add_variable('D', [0, 1., 2, 3., 4, 5., 6, 7., 8, 9., 10])  # Cast to float
+
+    # View the data, whether by attribute or key
+    >>> container.A                                      # By attribute
+    array([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+
+    >>> container['B']                                   # By key
+    array([3., 3., 3., 3., 3., 3., 3., 3., 3., 3., 3.])
+
+    >>> container.values  # Pack into a 2D array (casting to a common dtype)
+    array([[ 2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.],
+           [ 3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.],
+           [ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.],
+           [ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.]])
+
+    # Vector replacement preserves both length and dtype, making it more
+    # convenient than the NumPy equivalent: `container.B[:] = 4`
+    >>> container.B = 4  # Standard object behaviour would assign `4` to `B`...
+    >>> container.B      # ...but `VectorContainer`s broadcast and convert automatically
+    array([4., 4., 4., 4., 4., 4., 4., 4., 4., 4., 4.])  # Still a vector of floats
+
+    # NumPy-style indexing, whether by attribute or key (interchangeably)
+    >>> container.C[2:4]  # By attribute
+    array([2., 3.])
+
+    >>> container.B[2:4] = 5  # As above, assignment preserves original dtype
+    >>> container.B
+    array([4., 4., 5., 5., 4., 4., 4., 4., 4., 4., 4.])
+
+    >>> container['D'][3:-2]  # By key
+    array([3., 4., 5., 6., 7., 8.])
+
+    >>> container['C'][5:] = 9
+    >>> container.C  # `container['C']` also works
+    array([0., 1., 2., 3., 4., 9., 9., 9., 9., 9., 9.])
+
+    # pandas-like indexing using the span labels (must be by key, as a 2-tuple)
+    >>> container['D', 2005:2009]  # Second element (slice) refers to the labels of the object's span
+    array([5., 6., 7., 8., 9.])
+
+    >>> container['D', 2000:2008:2] = 12
+    >>> container['D']  # As previously, `container.D` also works
+    array([12.,  1., 12.,  3., 12.,  5., 12.,  7., 12.,  9., 10.])
+    """
 
     def __init__(self, span: Sequence[Hashable]) -> None:
         """Initialise model variables.
@@ -763,6 +874,9 @@ class VectorContainer:
         for name, series in zip(self.index, new_values):
             self.__setattr__(name, series.astype(self.__getattribute__('_' + name).dtype))
 
+    def eval(self) -> None:
+        raise NotImplementedError('`eval()` method (including API) not implemented yet')
+
 
 # Model interface, wrapping the core `VectorContainer` ------------------------
 
@@ -894,7 +1008,7 @@ class SolverMixin:
     LAGS: int = 0
     LEADS: int = 0
 
-    def iter_periods(self, *, start: Optional[Hashable] = None, end: Optional[Hashable] = None) -> Iterator[Tuple[int, Hashable]]:
+    def iter_periods(self, *, start: Optional[Hashable] = None, end: Optional[Hashable] = None, **kwargs: Any) -> Iterator[Tuple[int, Hashable]]:
         """Return pairs of period indexes and labels.
 
         Parameters
@@ -906,6 +1020,9 @@ class SolverMixin:
         end : element in the model's `span`
             Last period to return. If not given, defaults to the last solvable
             period, taking into account any leads in the model's equations
+        **kwargs : not used
+            Absorbs arguments passed from `solve()`. Available should the user
+            want to over-ride this method in their own derived class.
 
         Returns
         -------
@@ -1256,12 +1373,22 @@ class BaseModel(SolverMixin, ModelInterface):
                 'in period with label: {} (index: {})'
                 .format(self.span[t], t))
 
+        # Run any code prior to solution
+        self.solve_t_before(t, errors=errors, iteration=0, **kwargs)
+
         for iteration in range(1, max_iter + 1):
             previous_values = current_values.copy()
 
             with warnings.catch_warnings(record=True):
                 warnings.simplefilter('always')
-                self._evaluate(t, **kwargs)
+
+                try:
+                    self._evaluate(t, errors=errors, iteration=iteration, **kwargs)
+                except:
+                    raise SolutionError(
+                        'Error after {} iterations(s) '
+                        'in period with label: {} (index: {})'
+                        .format(iteration, self.span[t], t))
 
             current_values = get_check_values()
 
@@ -1307,9 +1434,8 @@ class BaseModel(SolverMixin, ModelInterface):
                 continue
 
             diff = current_values - previous_values
-            diff_squared = diff ** 2
-
-            if np.all(diff_squared < tol):
+            if np.all(np.abs(diff) < tol):
+                self.solve_t_after(t, errors=errors, iteration=iteration, **kwargs)
                 status = '.'
                 break
         else:
@@ -1326,13 +1452,30 @@ class BaseModel(SolverMixin, ModelInterface):
 
         return status == '.'
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def solve_t_before(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
+        """Pre-solution method: This runs each period, before the iterative solution. Over-ride to implement custom behaviour."""
+        pass
+
+    def solve_t_after(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
+        """Post-solution method: This runs each period, after the iterative solution. Over-ride to implement custom behaviour."""
+        pass
+
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         """Evaluate the system of equations for the period at integer position `t` in the model's `span`.
 
         Parameters
         ----------
         t : int
             Position in `span` of the period to solve
+        errors : str
+            User-specified treatment on encountering numerical solution
+            errors. Note that it is up to the user's over-riding code to decide
+            how to handle this.
+        iteration : int
+            The current iteration count. This is not guaranteed to take a
+            non-`None` value if the user has over-ridden the default calling
+            `solve_t()` method. Note that it is up to the user's over-riding
+            code to decide how to handle this.
         kwargs :
             Further keyword arguments for solution
         """
@@ -1355,7 +1498,7 @@ class Model(BaseModel):
     LAGS: int = {lags}
     LEADS: int = {leads}
 
-    def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+    def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
 {equations}\
 '''
 
@@ -1373,11 +1516,11 @@ class Model(BaseModel):
     LAGS = {lags}
     LEADS = {leads}
 
-    def _evaluate(self, t, **kwargs):
+    def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
 {equations}\
 '''
 
-def build_model_definition(symbols: List[Symbol], converter: Optional[Callable[[Symbol], str]] = None, *, with_type_hints: bool = True) -> str:
+def build_model_definition(symbols: List[Symbol], *, converter: Optional[Callable[[Symbol], str]] = None, with_type_hints: bool = True) -> str:
     """Return a model class definition string from the contents of `symbols` (with type hints, by default).
 
     Parameters
@@ -1451,7 +1594,7 @@ if _ > 0:  # Ignore negative values
         LAGS: int = 0
         LEADS: int = 0
 
-        def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+        def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
             # Y[t] = C[t] + I[t] + G[t] + X[t] - M[t]
             self._Y[t] = self._C[t] + self._I[t] + self._G[t] + self._X[t] - self._M[t]
 
@@ -1470,7 +1613,7 @@ if _ > 0:  # Ignore negative values
         LAGS = 0
         LEADS = 0
 
-        def _evaluate(self, t, **kwargs):
+        def _evaluate(self, t, *, errors='raise', iteration=None, **kwargs):
             # Y[t] = C[t] + I[t] + G[t] + X[t] - M[t]
             self._Y[t] = self._C[t] + self._I[t] + self._G[t] + self._X[t] - self._M[t]
 
@@ -1497,7 +1640,7 @@ if _ > 0:  # Ignore negative values
         LAGS: int = 0
         LEADS: int = 0
 
-        def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
+        def _evaluate(self, t: int, *, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
             # Y[t] = C[t] + I[t] + G[t] + X[t] - M[t]
             _ = self._C[t] + self._I[t] + self._G[t] + self._X[t] - self._M[t]
             if _ > 0:  # Ignore negative values
@@ -1558,7 +1701,7 @@ if _ > 0:  # Ignore negative values
 
     return model_definition_string
 
-def build_model(symbols: List[Symbol], converter: Optional[Callable[[Symbol], str]] = None, *, with_type_hints: bool = True) -> 'BaseModel':
+def build_model(symbols: List[Symbol], *, converter: Optional[Callable[[Symbol], str]] = None, with_type_hints: bool = True) -> 'BaseModel':
     """Return a model class definition from the contents of `symbols`. **Uses `exec()`.**
 
     Parameters
@@ -1878,14 +2021,14 @@ Spans of submodels differ:
             submodel.iterations[t] = 0
 
         # Run any code prior to solution
-        self.solve_t_before(t, submodels=submodels, **kwargs)
+        self.solve_t_before(t, submodels=submodels, errors=errors, iteration=0, **kwargs)
 
         for iteration in range(1, max_iter + 1):
             previous_values = copy.deepcopy(current_values)
 
-            self.evaluate_t_before(t, submodels=submodels, **kwargs)
-            self.evaluate_t(       t, submodels=submodels, **kwargs)
-            self.evaluate_t_after( t, submodels=submodels, **kwargs)
+            self.evaluate_t_before(t, submodels=submodels, errors=errors, iteration=iteration, **kwargs)
+            self.evaluate_t(       t, submodels=submodels, errors=errors, iteration=iteration, **kwargs)
+            self.evaluate_t_after( t, submodels=submodels, errors=errors, iteration=iteration, **kwargs)
 
             current_values = get_check_values()
 
@@ -1898,7 +2041,7 @@ Spans of submodels differ:
 
             if all(np.all(v < tol) for v in diff_squared.values()):
                 status = '.'
-                self.solve_t_after(t, submodels=submodels, **kwargs)
+                self.solve_t_after(t, submodels=submodels, errors=errors, iteration=iteration, **kwargs)
                 break
 
         else:
@@ -1919,7 +2062,7 @@ Spans of submodels differ:
 
         return status == '.'
 
-    def evaluate_t(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, **kwargs: Dict[str, Any]) -> None:
+    def evaluate_t(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         """Evaluate the system of equations for the period at integer position `t` in the linker's `span`.
 
         Parameters
@@ -1928,6 +2071,14 @@ Spans of submodels differ:
             Position in `span` of the period to solve
         submodels : sequence of submodel identifiers (as in `self.submodels.keys()`), default `None`
             Submodels to evaluate. If `None` (the default), evaluate them all.
+        errors : str
+            User-specified treatment on encountering numerical solution
+            errors, as passed to the individual submodels.
+        iteration : int
+            The current iteration count. This is not guaranteed to take a
+            non-`None` value if the user has over-ridden the default calling
+            `solve_t()` method. Note that it is up to the individual submodels'
+            over-riding code to decide how to handle this.
         kwargs :
             Further keyword arguments for solution
         """
@@ -1939,22 +2090,22 @@ Spans of submodels differ:
 
             with warnings.catch_warnings(record=True):
                 warnings.simplefilter('always')
-                submodel._evaluate(t, **kwargs)
+                submodel._evaluate(t, errors=errors, iteration=iteration, **kwargs)
 
             submodel.iterations[t] += 1
 
-    def solve_t_before(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, **kwargs: Dict[str, Any]) -> None:
+    def solve_t_before(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         """Pre-solution method: This runs each period, before the iterative solution. Over-ride to implement custom linker behaviour."""
         pass
 
-    def solve_t_after(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, **kwargs: Dict[str, Any]) -> None:
+    def solve_t_after(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
         """Post-solution method: This runs each period, after the iterative solution. Over-ride to implement custom linker behaviour."""
         pass
 
-    def evaluate_t_before(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, **kwargs: Dict[str, Any]) -> None:
-        """Evaluate any linker equations before solving the individual country models. Over-ride to implement custom linker behaviour."""
+    def evaluate_t_before(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
+        """Evaluate any linker equations before solving the individual submodels. Over-ride to implement custom linker behaviour."""
         pass
 
-    def evaluate_t_after(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, **kwargs: Dict[str, Any]) -> None:
-        """Evaluate any linker equations after solving the individual country models. Over-ride to implement custom linker behaviour."""
+    def evaluate_t_after(self, t: int, *, submodels: Optional[Sequence[Hashable]] = None, errors: str = 'raise', iteration: Optional[int] = None, **kwargs: Dict[str, Any]) -> None:
+        """Evaluate any linker equations after solving the individual submodels. Over-ride to implement custom linker behaviour."""
         pass
