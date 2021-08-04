@@ -1,10 +1,36 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-.ipynb_checkpoints/
-.pytest_cache/
-.mypy_cache/
+*.py[cod]
+*$py.class
 
+# C extensions
 *.so
 
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
 .coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
 
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Other
 .#*
