@@ -28,6 +28,7 @@ below) to process the data to a useable format.
 | [iomodel.py](iomodel.py)                   | Experimental library of base classes for defining a macroeconomic input-output model (nominally, version 0.1.0), drawing on code from [fsic.py](fsic.py)  |
 | [makefile](makefile)                       | Targets to automate various tasks                                                                                                                         |
 | [process_raw_data.py](process_raw_data.py) | Python script to process the raw data - run this before running example_model.py, to create the input data (as a new file: data.txt)                      |
+| [requirements.txt](requirements.txt)       | Dependencies to run the code                                                                                                                              |
 | [test_fsic.py](test_fsic.py)               | Test suite for [fsic.py](fsic.py) (version [0.7.1.dev](https://github.com/ChrisThoung/fsic/tree/v0.7.1.dev))                                              |
 | [test_iomodel.py](test_iomodel.py)         | Test suite for [iomodel.py](iomodel.py) (this script is compatible with `unittest` and similar test frameworks e.g. `unittest`, `pytest`, `nose`/`nose2`) |
 
