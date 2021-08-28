@@ -172,6 +172,16 @@ class MultiDimensionalContainer:
         self.__dict__['_' + name] = array
         self.__dict__['index'].append(name)
 
+    @property
+    def size(self) -> int:
+        """Total number of elements in the object's variable arrays."""
+        return sum(self.__dict__['_' + k].size for k in self.__dict__['index'])
+
+    @property
+    def nbytes(self) -> int:
+        """Total bytes consumed by the elements in the object's arrays."""
+        return sum(self.__dict__['_' + k].nbytes for k in self.__dict__['index'])
+
     def __getattr__(self, name: str) -> Any:
         if name in self.__dict__['index']:
             return self.__dict__['_' + name]

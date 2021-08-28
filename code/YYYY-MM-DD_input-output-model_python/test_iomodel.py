@@ -96,6 +96,27 @@ class TestIO(unittest.TestCase):
 
 class TestMultiDimensionalContainer(unittest.TestCase):
 
+    def test_size(self):
+        # Check that `size` returns the total number of array elements
+        container = iomodel.MultiDimensionalContainer()
+        container.add_variable('A', np.zeros((2, 3), dtype=float))
+        container.add_variable('B', np.zeros((3, 4), dtype=float))
+        container.add_variable('C', np.zeros((4, 5), dtype=float))
+        container.add_variable('D', np.zeros((5, 6), dtype=float))
+
+        self.assertEqual(container.size, sum([2 * 3, 3 * 4, 4 * 5, 5 * 6]))
+
+    def test_nbytes(self):
+        # Check that `nbytes` returns the total bytes consumed by the array
+        # elements
+        container = iomodel.MultiDimensionalContainer()
+        container.add_variable('A', np.zeros((2, 3), dtype=float))
+        container.add_variable('B', np.zeros((3, 4), dtype=float))
+        container.add_variable('C', np.zeros((4, 5), dtype=float))
+        container.add_variable('D', np.zeros((5, 6), dtype=float))
+
+        self.assertEqual(container.nbytes, sum([2 * 3, 3 * 4, 4 * 5, 5 * 6]) * 8)
+
     def test_setattr_replace(self):
         # Check array replacement
         container = iomodel.MultiDimensionalContainer()
@@ -175,6 +196,21 @@ class TestMultiDimensionalContainer(unittest.TestCase):
 
 
 class TestBaseMDModel(unittest.TestCase):
+
+    def test_nbytes(self):
+        # Check that `nbytes` returns the total bytes consumed by the array
+        # elements
+
+        class TestModel(iomodel.BaseMDModel):
+            VARIABLES = {'A': (3, 4), 'B': (4, 3)}
+
+        model = TestModel(range(20))
+
+        self.assertEqual(model.size, 480)
+        self.assertEqual(model.nbytes,
+                         (480 * 8) +  # Array elements
+                         (20 * 8) +   # Iterations
+                         (20 * 4))    # Status
 
     def test_init_wrong_shape(self):
         # Check that an initial value of the wrong dimensions raises an
