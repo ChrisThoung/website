@@ -572,7 +572,28 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
 
         # Optionally copy initial values from another period
         if offset:
-            raise NotImplementedError('`offset` not yet implemented')
+            t_check = t
+            if t_check < 0:
+                t_check += len(self.span)
+
+            # Error if `offset` points prior to the current model span
+            if t_check + offset < 0:
+                raise IndexError(
+                    '`offset` argument ({}) for position `t` ({}) '
+                    'implies a period before the span of the current model instance: '
+                    '{} + {} -> position {} < 0'.format(
+                        offset, t, offset, t, offset + t_check))
+
+            # Error if `offset` points beyond the current model span
+            if t_check + offset >= len(self.span):
+                raise IndexError(
+                    '`offset` argument ({}) for position `t` ({}) '
+                    'implies a period beyond the span of the current model instance: '
+                    '{} + {} -> position {} >= {} periods in span'.format(
+                        offset, t, offset, t, offset + t_check, len(self.span)))
+
+            for name in self.ENDOGENOUS:
+                self.__dict__['_' + name][t] = self.__dict__['_' + name][t + offset]
 
         status = '-'
         current_values = get_check_values()

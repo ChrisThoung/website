@@ -768,6 +768,39 @@ class TestBaseMDModel(unittest.TestCase):
         with self.assertRaises(iomodel.DimensionError):
             model.add_variable('A', np.zeros((10, 2, 3)), dimensions=(2, 'X'))
 
+    def test_solve_offset(self):
+        # Check that the `offset` argument copies values into the current
+        # period
+        class TestModel(iomodel.BaseMDModel):
+            VARIABLES = {'A': (3, 4), 'B': (3, 4)}
+            ENDOGENOUS = ['A', 'B']
+            LAGS = 1
+
+            def _evaluate(self, t):
+                self.A[t] = self.B[t]
+                self.B[t] *= 1
+
+        model = TestModel(['2000Q{}'.format(i) for i in range(1, 4 + 1)])
+
+        model.B = 5
+        model.solve()
+
+        self.assertTrue(np.allclose(model.A[0], 0))
+        self.assertTrue(np.allclose(model.A[1:], 5))
+
+        self.assertTrue(np.allclose(model.B, 5))
+
+        model.B[0] = 10
+        self.assertTrue(np.allclose(model.B[0], 10))
+        self.assertTrue(np.allclose(model.B[1:], 5))
+
+        model.solve(offset=-1)
+
+        self.assertTrue(np.allclose(model.A[0], 0))
+        self.assertTrue(np.allclose(model.A[1:], 10))
+
+        self.assertTrue(np.allclose(model.B, 10))
+
 
 if __name__ == '__main__':
     unittest.main()
