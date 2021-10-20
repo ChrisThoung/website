@@ -202,7 +202,8 @@ class TestBaseMDModel(unittest.TestCase):
         # elements
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'A': (3, 4), 'B': (4, 3)}
+            VARIABLES = {'A': ((3, 4), float, 0.0),
+                         'B': ((4, 3), float, 0.0), }
 
         model = TestModel(range(20))
 
@@ -217,7 +218,8 @@ class TestBaseMDModel(unittest.TestCase):
         # exception
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'A': (3, 4), 'B': (4, 3)}
+            VARIABLES = {'A': ((3, 4), float, 0.0),
+                         'B': ((4, 3), float, 0.0), }
 
         with self.assertRaises(iomodel.DimensionError):
             model = TestModel(range(2), A=np.zeros((2, 3, 4)),
@@ -229,7 +231,7 @@ class TestBaseMDModel(unittest.TestCase):
         # defining that dimension
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'A': 'Industries'}
+            VARIABLES = {'A': ('Industries', float, 0.0), }
 
         with self.assertRaises(iomodel.UndefinedDimensionError):
             model = TestModel(range(5))
@@ -255,11 +257,11 @@ class TestBaseMDModel(unittest.TestCase):
             }
 
             VARIABLES = {
-                'AB': 'A',
-                'CD': ('A', 'B', ),
-                'EF': ('B', 'A', 'A', ),
-                'GH': 5,
-                'IJ': ('A', 2),
+                'AB': ('A', float, 0.0),
+                'CD': (('A', 'B', ), float, 0.0),
+                'EF': (('B', 'A', 'A', ), float, 0.0),
+                'GH': (5, float, 0.0),
+                'IJ': (('A', 2), float, 0.0),
             }
 
         model = TestModel(range(6))
@@ -317,7 +319,7 @@ class TestBaseMDModel(unittest.TestCase):
         # Check `__getitem__()` indexing
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'X': (2, 3), }
+            VARIABLES = {'X': ((2, 3), float, 0.0), }
 
         model = TestModel(range(2005, 2010 + 1),
                           X=np.arange(36).reshape((6, 2, 3)))
@@ -348,7 +350,7 @@ class TestBaseMDModel(unittest.TestCase):
         # Check `__setitem__()` indexing
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'X': (2, 3), }
+            VARIABLES = {'X': ((2, 3), float, 0.0), }
 
         model = TestModel(range(2005, 2010 + 1),
                           X=np.arange(36).reshape((6, 2, 3)))
@@ -378,7 +380,7 @@ class TestBaseMDModel(unittest.TestCase):
         # the name and period label)
 
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'X': (2, 3), }
+            VARIABLES = {'X': ((2, 3), float, 0.0), }
 
         model = TestModel(range(2000, 2003 + 1), X=np.arange(24).reshape((4, 2, 3)))
 
@@ -454,11 +456,10 @@ class TestBaseMDModel(unittest.TestCase):
         # variable arrays
 
         class TestModel(iomodel.BaseMDModel):
-
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
         model = TestModel(range(10))
@@ -468,11 +469,10 @@ class TestBaseMDModel(unittest.TestCase):
         # Test `in` (membership) operator
 
         class TestModel(iomodel.BaseMDModel):
-
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
         model = TestModel(range(10))
@@ -490,11 +490,10 @@ class TestBaseMDModel(unittest.TestCase):
         # Check solution methods
 
         class TestModel(iomodel.BaseMDModel):
-
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
             def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
@@ -527,11 +526,10 @@ class TestBaseMDModel(unittest.TestCase):
         # copy unchanged
 
         class TestModel(iomodel.BaseMDModel):
-
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
             def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
@@ -587,9 +585,9 @@ class TestBaseMDModel(unittest.TestCase):
         class TestModel(iomodel.BaseMDModel):
 
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
             def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
@@ -645,9 +643,9 @@ class TestBaseMDModel(unittest.TestCase):
         class TestModel(iomodel.BaseMDModel):
 
             VARIABLES = {
-                'X': (3, 4),
-                'Y': (4, 3),
-                'Z': (4, 3),
+                'X': ((3, 4), float, 0.0),
+                'Y': ((4, 3), float, 0.0),
+                'Z': ((4, 3), float, 0.0),
             }
 
             def _evaluate(self, t: int, **kwargs: Dict[str, Any]) -> None:
@@ -703,9 +701,9 @@ class TestBaseMDModel(unittest.TestCase):
         class TestModel(iomodel.BaseMDModel):
 
             VARIABLES = {
-                'A': (2, 3),
-                'B': (2, 4),
-                'C': (3, 4),
+                'A': ((2, 3), float, 0.0),
+                'B': ((2, 4), float, 0.0),
+                'C': ((3, 4), float, 0.0),
             }
 
         model = TestModel(range(5))
@@ -772,7 +770,8 @@ class TestBaseMDModel(unittest.TestCase):
         # Check that the `offset` argument copies values into the current
         # period
         class TestModel(iomodel.BaseMDModel):
-            VARIABLES = {'A': (3, 4), 'B': (3, 4)}
+            VARIABLES = {'A': ((3, 4), float, 0.0),
+                         'B': ((3, 4), float, 0.0), }
             ENDOGENOUS = ['A', 'B']
             LAGS = 1
 

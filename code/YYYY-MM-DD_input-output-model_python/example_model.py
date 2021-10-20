@@ -63,20 +63,25 @@ class ScottishIOModel(BaseMDModel):
     # Naming conventions (personal: none are enforced by the code):
     #  - uppercase letters e.g. Z : a matrix in period t
     #  - lowercase letters e.g. q : a vector in period t
+    #
+    # Dictionary values consist of:
+    #  - int, str or sequence of int/str: variable dimensions
+    #  - array dtype
+    #  - default starting value(s) for the variable
     VARIABLES = {
-        'Z': ('Industries', 'Industries'),  # Intermediate consumption
-        'A': ('Industries', 'Industries'),  # Technical coefficients
-        'L': ('Industries', 'Industries'),  # Leontief inverse
+        'Z': (('Industries', 'Industries'), float, 0.0),  # Intermediate consumption
+        'A': (('Industries', 'Industries'), float, 0.0),  # Technical coefficients
+        'L': (('Industries', 'Industries'), float, 0.0),  # Leontief inverse
 
-        'q': 'Industries',                  # Gross output
+        'q': ('Industries', float, 0.0),                  # Gross output
 
-        'f': 'Industries',                  # Final demand (sum of all components)
-        'c': 'Industries',                  # HHFCE
-        'g': 'Industries',                  # Government expenditure
-        'i': 'Industries',                  # Gross capital formation
-        'x_nr': 'Industries',               # Exports - Non-residents
-        'x_ruk': 'Industries',              # Exports - RUK
-        'x_row': 'Industries',              # Exports - RoW
+        'f': ('Industries', float, 0.0),                  # Final demand (sum of all components)
+        'c': ('Industries', float, 0.0),                  # HHFCE
+        'g': ('Industries', float, 0.0),                  # Government expenditure
+        'i': ('Industries', float, 0.0),                  # Gross capital formation
+        'x_nr': ('Industries', float, 0.0),               # Exports - Non-residents
+        'x_ruk': ('Industries', float, 0.0),              # Exports - RUK
+        'x_row': ('Industries', float, 0.0),              # Exports - RoW
     }
 
     ENDOGENOUS = ['q']

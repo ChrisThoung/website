@@ -36,7 +36,7 @@ __version__ = '0.1.0.dev'
 
 
 import copy
-from typing import Any, Dict, Hashable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, Iterator, List, NamedTuple, Optional, Sequence, Tuple, Union
 import warnings
 
 import numpy as np
@@ -243,10 +243,15 @@ class MultiDimensionalContainer:
 
 # Base class for individual models --------------------------------------------
 
+class VariableDefinition(NamedTuple):
+    dimensions: Union[str, int, Sequence[Union[str, int]]]
+    dtype: Any
+    default_value: Any
+
 class BaseMDModel(SolverMixin, MultiDimensionalContainer):
 
     DIMENSIONS: Dict[str, Sequence[str]] = {}
-    VARIABLES: Dict[str, Union[str, Sequence[Union[str, int]], int]] = {}
+    VARIABLES: Dict[str, VariableDefinition] = {}
 
     ENDOGENOUS: List[str] = []
     CHECK: List[str] = ENDOGENOUS
@@ -254,18 +259,13 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
     LAGS: int = 0
     LEADS: int = 0
 
-    def __init__(self, span: Sequence[Hashable], *, dtype: Any = float, default_value: Union[int, float] = 0.0, **initial_values: Dict[str, Any]) -> None:
+    def __init__(self, span: Sequence[Hashable], **initial_values: Dict[str, Any]) -> None:
         """Initialise model variables.
 
         Parameters
         ----------
         span : iterable
             Sequence of periods that define the timespan of the model
-        dtype : variable type
-            Data type to impose on model variables (in NumPy arrays)
-        default_value : number
-            Default value with which to initialise model variables (if not
-            specified in `initial_values`)
         **initial_values : keyword arguments of variable names and values
             Values with which to initialise specific named model variables
         """
@@ -278,12 +278,13 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
 
         # Initialise model variables
         self.__dict__['dimensions'] = copy.deepcopy(self.DIMENSIONS)
-        self.__dict__['variables'] = copy.deepcopy(self.VARIABLES)
+        self.__dict__['variables'] = copy.deepcopy({k: dimensions
+                                                    for k, (dimensions, _, _) in self.VARIABLES.items()})
         self.__dict__['names'] = []
 
         dimension_lengths = {k: len(v) for k, v in self.__dict__['dimensions'].items()}
 
-        for name, dimensions in self.__dict__['variables'].items():
+        for name, (dimensions, dtype, default_value) in self.VARIABLES.items():
             # If not already a sequence, convert to a one-element list
             if isinstance(dimensions, str) or not isinstance(dimensions, Sequence):
                 dimensions = [dimensions]
