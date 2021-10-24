@@ -801,5 +801,21 @@ class TestBaseMDModel(unittest.TestCase):
         self.assertTrue(np.allclose(model.B, 10))
 
 
+class TestBaseMDModelErrors(unittest.TestCase):
+
+    def test_raise(self):
+        # Check that `errors='raise'` correctly raises a `SolutionError`
+        class TestModel(iomodel.BaseMDModel):
+            VARIABLES = {'A': (4, float, 0.0), }
+
+            def _evaluate(self, t):
+                self.A[t] /= 0  # Divide by zero
+
+        model = TestModel(range(3))
+
+        with self.assertRaises(iomodel.SolutionError):
+            model.solve(errors='raise')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -41,7 +41,7 @@ import warnings
 
 import numpy as np
 
-from fsic import FSICError, DimensionError, DuplicateNameError, NonConvergenceError
+from fsic import FSICError, DimensionError, DuplicateNameError, NonConvergenceError, SolutionError
 from fsic import SolverMixin
 
 
@@ -603,8 +603,18 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
             previous_values = copy.deepcopy(current_values)
 
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter('always')
-                self._evaluate(t, **kwargs)
+                if errors == 'raise':
+                    warnings.simplefilter('error')
+                else:
+                    warnings.simplefilter('always')
+
+                try:
+                    self._evaluate(t, **kwargs)
+                except:
+                    raise SolutionError(
+                        'Error after {} iterations(s) '
+                        'in period with label: {} (index: {})'
+                        .format(iteration, self.span[t], t))
 
                 # `errors` argument not implemented yet. For now, just fail if
                 # evaluation creates any problems
@@ -613,7 +623,7 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
                         'Solution encountered {} warning(s) '
                         'after {} iterations(s) '
                         'in period with label: {} (index: {}). '
-                        'Solution error handling not yet implemented.'
+                        'Solution error handling not fully implemented yet.'
                         .format(len(w), iteration, self.span[t], t))
 
             current_values = get_check_values()
