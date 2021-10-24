@@ -816,6 +816,9 @@ class TestBaseMDModelErrors(unittest.TestCase):
         with self.assertRaises(iomodel.SolutionError):
             model.solve(errors='raise')
 
+        self.assertEqual(list(model.status), ['E', '-', '-'])
+        self.assertEqual(list(model.iterations), [1, -1, -1])
+
 
 if __name__ == '__main__':
     unittest.main()

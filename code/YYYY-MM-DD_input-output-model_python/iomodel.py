@@ -611,6 +611,9 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
                 try:
                     self._evaluate(t, **kwargs)
                 except:
+                    self.status[t] = 'E'
+                    self.iterations[t] = iteration
+
                     raise SolutionError(
                         'Error after {} iterations(s) '
                         'in period with label: {} (index: {})'
