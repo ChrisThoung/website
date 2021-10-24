@@ -622,12 +622,20 @@ class BaseMDModel(SolverMixin, MultiDimensionalContainer):
                 # `errors` argument not implemented yet. For now, just fail if
                 # evaluation creates any problems
                 if len(w):
-                    raise NotImplementedError(
-                        'Solution encountered {} warning(s) '
-                        'after {} iterations(s) '
-                        'in period with label: {} (index: {}). '
-                        'Solution error handling not fully implemented yet.'
-                        .format(len(w), iteration, self.span[t], t))
+                    if errors == 'skip':
+                        status = 'S'
+                        break
+
+                    elif errors in ('ignore', 'replace', ):
+                        raise NotImplementedError(
+                            'Solution encountered {} warning(s) '
+                            'after {} iterations(s) '
+                            'in period with label: {} (index: {}). '
+                            'Solution error handling not fully implemented yet.'
+                            .format(len(w), iteration, self.span[t], t))
+
+                    else:
+                        raise ValueError("Unrecognised `errors` argument: '{}'".format(errors))
 
             current_values = get_check_values()
 

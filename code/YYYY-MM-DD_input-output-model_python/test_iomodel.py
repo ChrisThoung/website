@@ -819,6 +819,22 @@ class TestBaseMDModelErrors(unittest.TestCase):
         self.assertEqual(list(model.status), ['E', '-', '-'])
         self.assertEqual(list(model.iterations), [1, -1, -1])
 
+    def test_skip(self):
+        # Check that `errors='skip'` correctly continues to the next period on
+        # encountering an error
+        class TestModel(iomodel.BaseMDModel):
+            VARIABLES = {'A': (4, float, 0.0), }
+
+            def _evaluate(self, t):
+                self.A[t] /= 0  # Divide by zero
+
+        model = TestModel(range(3))
+
+        model.solve(errors='skip')
+
+        self.assertEqual(list(model.status), ['S', 'S', 'S'])
+        self.assertEqual(list(model.iterations), [1, 1, 1])
+
 
 if __name__ == '__main__':
     unittest.main()
