@@ -13,7 +13,7 @@ generate the input data (in 'data.txt').
 -------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2020 Chris Thoung
+Copyright (c) 2020-21 Chris Thoung
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
